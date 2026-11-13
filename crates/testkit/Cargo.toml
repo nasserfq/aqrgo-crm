@@ -1,0 +1,9 @@
+[package]
+name = "testkit"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+sqlx.workspace = true
+rand.workspace = true

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}حسابي{% endblock %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>حسابي</h1>
+  <p class="muted" dir="ltr">{{ user.email }}</p>
+
+  <h2>ربط تيليجرام</h2>
+  {% if let Some(bot) = telegram_bot %}
+    {% if telegram_linked %}
+      <p class="ok">✓ حساب تيليجرام مربوط. أرسل العروض إلى <a href="https://t.me/{{ bot }}" dir="ltr">@{{ bot }}</a> وستظهر في جدولك.</p>
+      <form method="post" action="/account/telegram/unlink" onsubmit="return confirm('إلغاء ربط تيليجرام؟')">
+        <button class="btn danger" type="submit">إلغاء الربط</button>
+      </form>
+      <p class="muted">لربط حساب تيليجرام آخر بدلاً منه:</p>
+    {% else %}
+      <p>اربط حساب تيليجرام لترسل العروض للبوت فتُضاف لجدولك تلقائياً.</p>
+    {% endif %}
+    {% if let Some(url) = link_url %}
+      <a class="btn primary" href="{{ url }}" target="_blank" rel="noopener">افتح تيليجرام واضغط «ابدأ»</a>
+      <p class="muted">الرابط صالح لمدة 15 دقيقة ولمرة واحدة.</p>
+    {% else %}
+      <form method="post" action="/account/telegram"><button class="btn primary" type="submit">إنشاء رابط الربط</button></form>
+    {% endif %}
+  {% else %}
+    <p class="muted">بوت تيليجرام غير مُعد بعد.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{% if id.is_some() %}تعديل عرض{% else %}عرض جديد{% endif %}{% endblock %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
+{% block content %}
+<section class="card form-card">
+  <div class="card-head">
+    <h1>{% if id.is_some() %}تعديل العرض رقم {{ number }}{% else %}عرض جديد{% endif %}</h1>
+    <a class="link" href="/">رجوع للجدول</a>
+  </div>
+  {% if let Some(err) = error %}<p class="error">{{ err }}</p>{% endif %}
+  <form method="post" action="{% if let Some(i) = id %}/listings/{{ i }}{% else %}/listings/new{% endif %}" class="fields">
+    {% for (key, label) in fields.iter() %}
+    <label class="field {% if self.is_multiline(key) %}wide{% endif %}">
+      <span>{{ label }}</span>
+      {% if self.is_multiline(key) %}
+      <textarea name="{{ key }}" rows="2">{{ input.get(key) }}</textarea>
+      {% else %}
+      <input name="{{ key }}" value="{{ input.get(key) }}" {% if *key == "offer_type" %}list="offer-types" autofocus{% endif %}>
+      {% endif %}
+    </label>
+    {% endfor %}
+    <datalist id="offer-types">{% for s in suggestions.iter() %}<option value="{{ s }}">{% endfor %}</datalist>
+    <label class="field">
+      <span>اليوم والتاريخ</span>
+      <input type="date" name="listed_on" value="{{ date_value }}">
+      <small class="hint">{{ date_label }}</small>
+    </label>
+    <label class="field">
+      <span>الحالة</span>
+      <select name="status">
+        {% for st in statuses %}
+        <option value="{{ st.as_str() }}" {% if input.status == *st %}selected{% endif %}>{{ st.label_ar() }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <div class="form-actions">
+      <button class="btn primary" type="submit">حفظ</button>
+      <a class="btn" href="/">إلغاء</a>
+    </div>
+  </form>
+  {% if let Some(i) = id %}
+  <form method="post" action="/listings/{{ i }}/delete" class="danger-zone" onsubmit="return confirm('حذف هذا العرض نهائياً؟')">
+    <button class="btn danger" type="submit">حذف العرض</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

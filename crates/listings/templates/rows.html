@@ -1,0 +1,19 @@
+{% for l in listings %}
+<tr onclick="location.href='/listings/{{ l.id }}'" tabindex="0" onkeydown="if(event.key==='Enter')location.href='/listings/{{ l.id }}'">
+  <td class="num">{{ l.number() }}{% if l.source == "telegram" %}<span class="src" title="أضيف من تيليجرام">✈</span>{% endif %}</td>
+  <td class="strong">{{ l.offer_type }}</td>
+  <td>{{ l.plan_no }}</td>
+  <td>{{ l.plot_no }}</td>
+  <td class="nowrap">{{ l.area }}</td>
+  <td class="wrap">{{ l.frontages }}</td>
+  <td class="wrap">{{ l.location }}</td>
+  <td class="nowrap">{{ l.price }}</td>
+  <td class="wrap">{{ l.buyer }}</td>
+  <td class="wrap">{{ l.seller }}</td>
+  <td class="wrap">{{ l.broker }}</td>
+  <td class="date">{{ l.date_hijri() }}<br><bdi dir="ltr">{{ l.date_gregorian() }}</bdi></td>
+  <td><span class="pill {{ l.status }}">{{ l.status().label_ar() }}</span></td>
+</tr>
+{% else %}
+<tr class="empty"><td colspan="13">لا توجد عروض بعد. أضف أول عرض من زر «إضافة عرض» أو من بوت تيليجرام.</td></tr>
+{% endfor %}

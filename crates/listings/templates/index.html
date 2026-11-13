@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}العروض{% endblock %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
+{% block content %}
+<section class="toolbar no-print">
+  <form id="filters" class="filters" action="/" method="get"
+        hx-get="/rows" hx-target="#rows" hx-trigger="input changed delay:300ms from:input, change from:select" hx-push-url="false">
+    <input type="search" name="q" value="{{ q }}" placeholder="بحث: رقم مخطط، حي، اسم، جوال…" autocomplete="off">
+    <select name="status">
+      <option value="">كل الحالات</option>
+      {% for st in statuses %}
+      <option value="{{ st.as_str() }}" {% if status == st.as_str() %}selected{% endif %}>{{ st.label_ar() }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <div class="actions">
+    <a class="btn primary" href="/listings/new">＋ إضافة عرض</a>
+    <a class="btn" href="/export.csv" onclick="this.href='/export.csv?'+new URLSearchParams(new FormData(document.getElementById('filters')))">تصدير Excel</a>
+    <button class="btn" type="button" onclick="window.print()">طباعة</button>
+  </div>
+</section>
+
+<div class="sheet">
+  <h1 class="print-only">جدول العروض العقارية</h1>
+  <div class="table-wrap">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th class="num">م</th>
+          {% for (_key, label) in fields.iter() %}<th>{{ label }}</th>{% endfor %}
+          <th>اليوم والتاريخ</th>
+          <th>الحالة</th>
+        </tr>
+      </thead>
+      <tbody id="rows">{% include "rows.html" %}</tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

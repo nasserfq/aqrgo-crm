@@ -1,0 +1,12 @@
+[package]
+name = "common"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono.workspace = true
+icu_calendar.workspace = true
+serde.workspace = true
+sqlx.workspace = true
+askama.workspace = true
