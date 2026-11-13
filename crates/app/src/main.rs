@@ -77,10 +77,13 @@ async fn main() -> anyhow::Result<()> {
 
     // Background worker: emails + Telegram updates.
     let ses = mailer::SesSender {
-        client: aws
-            .as_ref()
-            .filter(|_| cfg.mail_from.is_some())
-            .map(aws_sdk_sesv2::Client::new),
+        client: aws.as_ref().filter(|_| cfg.mail_from.is_some()).map(|a| {
+            let mut ses = aws_sdk_sesv2::config::Builder::from(a);
+            if let Some(r) = cfg.ses_region.clone() {
+                ses = ses.region(aws_sdk_sesv2::config::Region::new(r));
+            }
+            aws_sdk_sesv2::Client::from_conf(ses.build())
+        }),
         from: cfg.mail_from.clone().unwrap_or_default(),
     };
     let mut worker = mailer::register(jobs.worker(), ses);

@@ -14,6 +14,8 @@ pub struct Config {
     pub telegram_bot_token: Option<String>,
     pub telegram_webhook_secret: Option<String>,
     pub bedrock_model_id: Option<String>,
+    /// SES can live in another region than Bedrock (e.g. us-east-2 for email).
+    pub ses_region: Option<String>,
     /// Use AWS (SES/Bedrock). Off in local development without credentials.
     pub aws_enabled: bool,
 }
@@ -59,6 +61,7 @@ impl Config {
             telegram_bot_token,
             telegram_webhook_secret,
             bedrock_model_id: opt("BEDROCK_MODEL_ID"),
+            ses_region: opt("SES_REGION"),
             aws_enabled: opt("AWS_REGION").is_some(),
         })
     }
