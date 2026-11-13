@@ -42,3 +42,4 @@ ai = { path = "crates/ai" }
 listings = { path = "crates/listings" }
 auth = { path = "crates/auth" }
 telegram = { path = "crates/telegram" }
+whatsapp = { path = "crates/whatsapp" }

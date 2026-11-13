@@ -32,9 +32,16 @@ Columns, right to left, in this order (from the Word table), plus the columns re
 - Step-by-step entry (/new) asks each field with a skip button. It is the fallback when AI is off or fails.
 - /last shows the latest rows. Telegram updates are processed by background jobs.
 
+## WhatsApp
+
+- The same conversation as Telegram, on WhatsApp, through Meta's WhatsApp Cloud API directly (no Twilio or other provider), so replies within the 24-hour window are free.
+- Each user links one WhatsApp number from the account page: a one-time `wa.me` link pre-fills `ربط <code>`.
+- Up to three choices are reply buttons; longer choices (field list, offer types) are WhatsApp list messages. Meta's webhook signature is checked on every delivery, and a message delivered twice is answered once.
+- Saved rows are marked as coming from WhatsApp. Setup: `docs/whatsapp-setup.md`.
+
 ## Architecture
 
-- Rust + Axum modular monolith (Cargo workspace). Modules: `listings`, `auth`, `telegram`, `ai`, `jobs`, `mailer`, `common`, wired by `app`. Modules talk through public APIs and each owns its own Postgres schema and migrations.
+- Rust + Axum modular monolith (Cargo workspace). Modules: `listings`, `auth`, `telegram` (the bot conversation and the Telegram adapter), `whatsapp` (the WhatsApp adapter), `ai`, `jobs`, `mailer`, `common`, wired by `app`. Modules talk through public APIs and each owns its own Postgres schema and migrations.
 - Server-rendered pages (Askama + a little htmx).
 - PostgreSQL, self-hosted next to the app (not Supabase), with daily backups.
 - Background jobs: Postgres-backed queue with retries.

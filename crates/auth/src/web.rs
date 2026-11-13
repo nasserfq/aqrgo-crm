@@ -15,7 +15,7 @@ use common::{ui::Nav, CurrentUser};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 
-use crate::{AuthError, AuthService};
+use crate::{AuthError, AuthService, Channel};
 
 pub const SESSION_COOKIE: &str = "aqrgo_session";
 const STATE_COOKIE: &str = "aqrgo_oauth_state";
@@ -33,6 +33,8 @@ pub struct WebConfig {
     pub google: Option<GoogleConfig>,
     /// Telegram bot username without '@', for the account-linking deep link.
     pub telegram_bot: Option<String>,
+    /// The WhatsApp business number in international digits, for `wa.me` links.
+    pub whatsapp_number: Option<String>,
 }
 
 impl WebConfig {
@@ -76,6 +78,8 @@ pub fn account_router(state: AuthWeb) -> Router {
         .route("/account", get(account_page))
         .route("/account/telegram", post(telegram_link))
         .route("/account/telegram/unlink", post(telegram_unlink))
+        .route("/account/whatsapp", post(whatsapp_link))
+        .route("/account/whatsapp/unlink", post(whatsapp_unlink))
         .with_state(state)
 }
 
@@ -381,21 +385,54 @@ struct AccountPage {
     nav: Nav,
     telegram_linked: bool,
     telegram_bot: Option<String>,
-    link_url: Option<String>,
+    telegram_link_url: Option<String>,
+    whatsapp_linked: bool,
+    whatsapp_number: Option<String>,
+    whatsapp_link_url: Option<String>,
+}
+
+impl AuthWeb {
+    async fn account(&self, user: CurrentUser) -> AccountPage {
+        let id = user.id;
+        AccountPage {
+            user,
+            nav: Nav::Account,
+            telegram_linked: self
+                .service
+                .linked(Channel::Telegram, id)
+                .await
+                .unwrap_or(false),
+            telegram_bot: self.config.telegram_bot.clone(),
+            telegram_link_url: None,
+            whatsapp_linked: self
+                .service
+                .linked(Channel::WhatsApp, id)
+                .await
+                .unwrap_or(false),
+            whatsapp_number: self.config.whatsapp_number.clone(),
+            whatsapp_link_url: None,
+        }
+    }
+}
+
+/// Percent-encodes everything but ASCII letters and digits (for URL queries).
+fn url_encode(s: &str) -> String {
+    s.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
 }
 
 async fn account_page(
     State(s): State<AuthWeb>,
     Extension(user): Extension<CurrentUser>,
 ) -> Response {
-    let telegram_linked = s.service.telegram_linked(user.id).await.unwrap_or(false);
-    render(&AccountPage {
-        user,
-        nav: Nav::Account,
-        telegram_linked,
-        telegram_bot: s.config.telegram_bot.clone(),
-        link_url: None,
-    })
+    render(&s.account(user).await)
 }
 
 async fn telegram_link(
@@ -405,17 +442,11 @@ async fn telegram_link(
     let Some(bot) = s.config.telegram_bot.clone() else {
         return Redirect::to("/account").into_response();
     };
-    match s.service.create_telegram_link(user.id).await {
+    match s.service.create_link(user.id).await {
         Ok(token) => {
-            let telegram_linked = s.service.telegram_linked(user.id).await.unwrap_or(false);
-            let link_url = Some(format!("https://t.me/{bot}?start={token}"));
-            render(&AccountPage {
-                user,
-                nav: Nav::Account,
-                telegram_linked,
-                telegram_bot: Some(bot),
-                link_url,
-            })
+            let mut page = s.account(user).await;
+            page.telegram_link_url = Some(format!("https://t.me/{bot}?start={token}"));
+            render(&page)
         }
         Err(e) => {
             tracing::error!(error = %e, "create telegram link");
@@ -424,11 +455,42 @@ async fn telegram_link(
     }
 }
 
+async fn whatsapp_link(
+    State(s): State<AuthWeb>,
+    Extension(user): Extension<CurrentUser>,
+) -> Response {
+    let Some(number) = s.config.whatsapp_number.clone() else {
+        return Redirect::to("/account").into_response();
+    };
+    match s.service.create_link(user.id).await {
+        Ok(token) => {
+            let mut page = s.account(user).await;
+            let text = url_encode(&format!("ربط {token}"));
+            page.whatsapp_link_url = Some(format!("https://wa.me/{number}?text={text}"));
+            render(&page)
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "create whatsapp link");
+            (StatusCode::INTERNAL_SERVER_ERROR, "error").into_response()
+        }
+    }
+}
+
+async fn whatsapp_unlink(
+    State(s): State<AuthWeb>,
+    Extension(user): Extension<CurrentUser>,
+) -> Response {
+    if let Err(e) = s.service.unlink(Channel::WhatsApp, user.id).await {
+        tracing::error!(error = %e, "unlink whatsapp");
+    }
+    (StatusCode::SEE_OTHER, [(header::LOCATION, "/account")]).into_response()
+}
+
 async fn telegram_unlink(
     State(s): State<AuthWeb>,
     Extension(user): Extension<CurrentUser>,
 ) -> Response {
-    if let Err(e) = s.service.unlink_telegram(user.id).await {
+    if let Err(e) = s.service.unlink(Channel::Telegram, user.id).await {
         tracing::error!(error = %e, "unlink telegram");
     }
     (StatusCode::SEE_OTHER, [(header::LOCATION, "/account")]).into_response()

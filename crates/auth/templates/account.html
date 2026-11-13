@@ -17,7 +17,7 @@
     {% else %}
       <p>اربط حساب تيليجرام لترسل العروض للبوت، فيرتبها ويعرضها عليك للتأكيد ثم يحفظها في جدولك.</p>
     {% endif %}
-    {% if let Some(url) = link_url %}
+    {% if let Some(url) = telegram_link_url %}
       <a class="btn primary" href="{{ url }}" target="_blank" rel="noopener">افتح تيليجرام واضغط «ابدأ»</a>
       <p class="muted">الرابط صالح لمدة 15 دقيقة ولمرة واحدة.</p>
     {% else %}
@@ -25,6 +25,27 @@
     {% endif %}
   {% else %}
     <p class="muted">بوت تيليجرام غير مُعد بعد.</p>
+  {% endif %}
+
+  <h2>ربط واتساب</h2>
+  {% if let Some(number) = whatsapp_number %}
+    {% if whatsapp_linked %}
+      <p class="ok">✓ رقم واتساب مربوط. أرسل العروض إلى <a href="https://wa.me/{{ number }}" dir="ltr">+{{ number }}</a> وسأعرض عليك كل عرض لتأكيده قبل حفظه في جدولك.</p>
+      <form method="post" action="/account/whatsapp/unlink" onsubmit="return confirm('إلغاء ربط واتساب؟')">
+        <button class="btn danger" type="submit">إلغاء الربط</button>
+      </form>
+      <p class="muted">لربط رقم آخر بدلاً منه:</p>
+    {% else %}
+      <p>اربط رقم واتساب لترسل العروض أو تعيد توجيهها لرقم AQRGO، فيرتبها ويعرضها عليك للتأكيد ثم يحفظها في جدولك.</p>
+    {% endif %}
+    {% if let Some(url) = whatsapp_link_url %}
+      <a class="btn primary" href="{{ url }}" target="_blank" rel="noopener">افتح واتساب واضغط «إرسال»</a>
+      <p class="muted">ستُكتب رسالة الربط تلقائياً. الرابط صالح لمدة 15 دقيقة ولمرة واحدة.</p>
+    {% else %}
+      <form method="post" action="/account/whatsapp"><button class="btn primary" type="submit">إنشاء رابط الربط</button></form>
+    {% endif %}
+  {% else %}
+    <p class="muted">واتساب غير مُعد بعد.</p>
   {% endif %}
 </section>
 {% endblock %}
