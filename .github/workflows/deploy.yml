@@ -74,6 +74,7 @@ jobs:
       packages: read
     env:
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aqrgo-crm' }}
+      APP_DOMAIN: ${{ vars.APP_DOMAIN || 'aqrgo.com' }}
       IMAGE: ${{ needs.build.outputs.image }}:${{ github.sha }}
       AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -100,7 +101,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: DEPLOY_DIR,IMAGE,AWS_BEARER_TOKEN_BEDROCK,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,TELEGRAM_BOT_TOKEN,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET
+          envs: DEPLOY_DIR,APP_DOMAIN,IMAGE,AWS_BEARER_TOKEN_BEDROCK,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,TELEGRAM_BOT_TOKEN,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET
           script: |
             set -e
             cd "$DEPLOY_DIR"
@@ -112,8 +113,10 @@ jobs:
               echo "Created $DEPLOY_DIR/.env from .env.example"
             fi
             chmod 600 .env
+            # The public address is set here so changing it needs no server edits.
+            DOMAIN="$APP_DOMAIN"; PUBLIC_URL="https://$APP_DOMAIN"
             # Secrets kept in GitHub are written into .env so they never live in the repo.
-            for name in AWS_BEARER_TOKEN_BEDROCK AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TELEGRAM_BOT_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
+            for name in DOMAIN PUBLIC_URL AWS_BEARER_TOKEN_BEDROCK AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TELEGRAM_BOT_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET; do
               value="${!name}"
               [ -n "$value" ] || continue
               grep -v "^$name=" .env > .env.new || true
@@ -136,9 +139,8 @@ jobs:
               sleep 2
             done
             if [ -z "$healthy" ]; then docker compose logs --tail 80 app; exit 1; fi
-            # Route crm.aqrgo.com (with HTTPS) to the app through the shared kamal-proxy.
-            DOMAIN=$(grep '^DOMAIN=' .env | cut -d= -f2-)
+            # Route the domain and www (with HTTPS) to the app through the shared kamal-proxy.
             docker exec kamal-proxy kamal-proxy deploy aqrgo-crm \
-              --target aqrgo-crm-app:8080 --host "${DOMAIN:-crm.aqrgo.com}" --tls \
+              --target aqrgo-crm-app:8080 --host "$APP_DOMAIN" --host "www.$APP_DOMAIN" --tls \
               --health-check-path /healthz
-            echo "Deployed $IMAGE
+            echo "Deployed $IMAGE"

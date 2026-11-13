@@ -2,7 +2,7 @@
 # directory and runs `docker compose pull && docker compose up -d`.
 # HTTPS is handled by the server's existing kamal-proxy (shared with other
 # apps): the app joins the `kamal` network and the deploy registers
-# crm.aqrgo.com with it.
+# aqrgo.com and www.aqrgo.com with it.
 services:
   app:
     image: ${APP_IMAGE:?set APP_IMAGE in .env}

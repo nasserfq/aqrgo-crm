@@ -28,7 +28,7 @@ pub struct GoogleConfig {
 
 #[derive(Clone, Debug)]
 pub struct WebConfig {
-    /// e.g. https://crm.aqrgo.com (no trailing slash)
+    /// e.g. https://aqrgo.com (no trailing slash)
     pub public_url: String,
     pub google: Option<GoogleConfig>,
     /// Telegram bot username without '@', for the account-linking deep link.

@@ -39,5 +39,5 @@ Columns, right to left, in this order (from the Word table), plus the columns re
 - PostgreSQL, self-hosted next to the app (not Supabase), with daily backups.
 - Background jobs: Postgres-backed queue with retries.
 - No Redis for now (Postgres covers current needs).
-- Built and deployed by GitHub Actions (never compiled on the server): test, build Docker image to GHCR, SSH to the server, `docker compose up`. Caddy provides HTTPS for crm.aqrgo.com.
+- Built and deployed by GitHub Actions (never compiled on the server): test, build Docker image to GHCR, SSH to the server, `docker compose up`. The server's shared kamal-proxy provides HTTPS for aqrgo.com and www.aqrgo.com.
 - Built test-first (TDD) at agreed seams.

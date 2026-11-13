@@ -39,7 +39,7 @@ Every push to `main` runs the tests, builds the Docker image on GitHub, pushes i
 
 **One-time server setup** (any Linux server with Docker):
 
-1. Point `crm.aqrgo.com` (A record) at the server's IP. Open ports 80 and 443.
+1. Point `aqrgo.com` (A record) and `www.aqrgo.com` at the server's IP. Open ports 80 and 443. HTTPS comes from the server's existing kamal-proxy.
 2. `sudo mkdir -p /opt/aqrgo-crm && sudo chown $USER /opt/aqrgo-crm`
 3. The first deploy creates `/opt/aqrgo-crm/.env` from `deploy/.env.example` with a generated database password and webhook secret. Keys kept as GitHub secrets (AWS, Telegram, Google) are written into it on every deploy.
 
@@ -61,7 +61,7 @@ Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment
 **Settings in `.env`:**
 
 - **AWS**: an IAM user with `ses:SendEmail` and `bedrock:InvokeModel`. Instead of giving that user Bedrock access, you can paste a Bedrock API key into `AWS_BEARER_TOKEN_BEDROCK`. Its region must match `AWS_REGION`. If SES is in another region, set `SES_REGION` (for example `us-east-2`). In SES, verify the `aqrgo.com` domain (it gives you DNS records) and request production access. In Bedrock, enable access to the Amazon Nova model in your region.
-- **Google sign-in** (optional): Google Cloud Console → APIs & Services → Credentials → OAuth client (Web). Redirect URI: `https://crm.aqrgo.com/auth/google/callback`.
+- **Google sign-in** (optional): Google Cloud Console → APIs & Services → Credentials → OAuth client (Web). Redirect URI: `https://aqrgo.com/auth/google/callback`.
 - **Telegram**: create a bot with @BotFather, paste the token, and set `TELEGRAM_WEBHOOK_SECRET` to a random string. The app registers its webhook on startup.
 
 Backups: a daily `pg_dump` lands in `/opt/aqrgo-crm/backups` (14 days kept). Copy them off the server too.
