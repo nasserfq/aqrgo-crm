@@ -11,7 +11,25 @@ const CODE_TTL_MINUTES: i32 = 10;
 const MAX_ATTEMPTS: i32 = 5;
 const MAX_CODES_PER_HOUR: i64 = 5;
 const SESSION_DAYS: i32 = 30;
-const TELEGRAM_LINK_MINUTES: i32 = 15;
+const LINK_MINUTES: i32 = 15;
+
+/// A chat app a user can link one account of, to send leads from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Channel {
+    Telegram,
+    /// Keyed by the sender's phone number in international digits (WhatsApp's `wa_id`).
+    WhatsApp,
+}
+
+impl Channel {
+    /// Column in `auth.users` holding the linked id. Fixed strings only.
+    fn column(self) -> &'static str {
+        match self {
+            Channel::Telegram => "telegram_id",
+            Channel::WhatsApp => "whatsapp_id",
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
@@ -314,8 +332,9 @@ impl AuthService {
         Ok(())
     }
 
-    /// One-time token for the Telegram deep link `t.me/<bot>?start=<token>`.
-    pub async fn create_telegram_link(&self, user_id: i64) -> Result<String, AuthError> {
+    /// One-time token that links a chat account to this user: the Telegram
+    /// deep link `t.me/<bot>?start=<token>`, or a WhatsApp message `ربط <token>`.
+    pub async fn create_link(&self, user_id: i64) -> Result<String, AuthError> {
         let token = random_token()[..32].to_string();
         sqlx::query(
             "INSERT INTO auth.telegram_link_tokens (token_hash, user_id, expires_at)
@@ -323,18 +342,21 @@ impl AuthService {
         )
         .bind(sha256_hex(&token))
         .bind(user_id)
-        .bind(TELEGRAM_LINK_MINUTES)
+        .bind(LINK_MINUTES)
         .execute(&self.pool)
         .await?;
         Ok(token)
     }
 
-    /// Links `telegram_id` to the token's user, replacing any earlier link.
-    pub async fn redeem_telegram_link(
+    /// Links the chat account `id` on `channel` to the token's user,
+    /// replacing any earlier link on that channel.
+    pub async fn redeem_link(
         &self,
+        channel: Channel,
         token: &str,
-        telegram_id: i64,
+        id: i64,
     ) -> Result<Option<CurrentUser>, AuthError> {
+        let col = channel.column();
         let mut tx = self.pool.begin().await?;
         let user_id: Option<i64> = sqlx::query_scalar(
             "DELETE FROM auth.telegram_link_tokens WHERE token_hash = $1 AND expires_at > now() RETURNING user_id",
@@ -345,48 +367,58 @@ impl AuthService {
         let Some(user_id) = user_id else {
             return Ok(None);
         };
-        sqlx::query("UPDATE auth.users SET telegram_id = NULL WHERE telegram_id = $1")
-            .bind(telegram_id)
-            .execute(&mut *tx)
-            .await?;
-        let row: UserRow = sqlx::query_as(
-            "UPDATE auth.users SET telegram_id = $2 WHERE id = $1 RETURNING id, email, name",
-        )
+        sqlx::query(&format!(
+            "UPDATE auth.users SET {col} = NULL WHERE {col} = $1"
+        ))
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
+        let row: UserRow = sqlx::query_as(&format!(
+            "UPDATE auth.users SET {col} = $2 WHERE id = $1 RETURNING id, email, name"
+        ))
         .bind(user_id)
-        .bind(telegram_id)
+        .bind(id)
         .fetch_one(&mut *tx)
         .await?;
         tx.commit().await?;
         Ok(Some(row.into()))
     }
 
-    pub async fn user_for_telegram(
+    /// The user whose `channel` account is `id`, if linked.
+    pub async fn user_for(
         &self,
-        telegram_id: i64,
+        channel: Channel,
+        id: i64,
     ) -> Result<Option<CurrentUser>, AuthError> {
-        let row: Option<UserRow> =
-            sqlx::query_as("SELECT id, email, name FROM auth.users WHERE telegram_id = $1")
-                .bind(telegram_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row: Option<UserRow> = sqlx::query_as(&format!(
+            "SELECT id, email, name FROM auth.users WHERE {} = $1",
+            channel.column()
+        ))
+        .bind(id)
+        .fetch_optional(&self.pool)
+        .await?;
         Ok(row.filter(|u| self.config.allows(&u.email)).map(Into::into))
     }
 
-    pub async fn telegram_linked(&self, user_id: i64) -> Result<bool, AuthError> {
-        Ok(
-            sqlx::query_scalar("SELECT telegram_id IS NOT NULL FROM auth.users WHERE id = $1")
-                .bind(user_id)
-                .fetch_optional(&self.pool)
-                .await?
-                .unwrap_or(false),
-        )
+    pub async fn linked(&self, channel: Channel, user_id: i64) -> Result<bool, AuthError> {
+        Ok(sqlx::query_scalar(&format!(
+            "SELECT {} IS NOT NULL FROM auth.users WHERE id = $1",
+            channel.column()
+        ))
+        .bind(user_id)
+        .fetch_optional(&self.pool)
+        .await?
+        .unwrap_or(false))
     }
 
-    pub async fn unlink_telegram(&self, user_id: i64) -> Result<(), AuthError> {
-        sqlx::query("UPDATE auth.users SET telegram_id = NULL WHERE id = $1")
-            .bind(user_id)
-            .execute(&self.pool)
-            .await?;
+    pub async fn unlink(&self, channel: Channel, user_id: i64) -> Result<(), AuthError> {
+        sqlx::query(&format!(
+            "UPDATE auth.users SET {} = NULL WHERE id = $1",
+            channel.column()
+        ))
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
         Ok(())
     }
 }

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use auth::{AuthConfig, AuthService, CodeMailer};
+use auth::{AuthConfig, AuthService, Channel, CodeMailer};
 use chrono::NaiveDate;
 use listings::{Filter, ListingInput, ListingsService};
 use telegram::{Bot, Buttons, Incoming, Outbox};
@@ -22,11 +22,14 @@ enum Out {
     Answer,
 }
 
-#[derive(Default, Clone)]
-struct Recorder(Arc<Mutex<Vec<Out>>>);
+#[derive(Clone)]
+struct Recorder(Arc<Mutex<Vec<Out>>>, Channel);
 
 #[async_trait::async_trait]
 impl Outbox for Recorder {
+    fn channel(&self) -> Channel {
+        self.1
+    }
     async fn send(&self, _chat: i64, text: &str, buttons: Buttons) -> Result<i32, String> {
         let mut v = self.0.lock().unwrap();
         v.push(Out::Send {
@@ -55,7 +58,16 @@ impl Outbox for Recorder {
     }
 }
 
+impl Default for Recorder {
+    fn default() -> Self {
+        Recorder(Arc::default(), Channel::Telegram)
+    }
+}
+
 impl Recorder {
+    fn on(channel: Channel) -> Self {
+        Recorder(Arc::default(), channel)
+    }
     fn take(&self) -> Vec<Out> {
         std::mem::take(&mut *self.0.lock().unwrap())
     }
@@ -172,7 +184,7 @@ impl World {
         self.bot.handle(&self.out, msg).await.unwrap();
     }
     async fn link(&self) {
-        let token = self.auth.create_telegram_link(self.owner).await.unwrap();
+        let token = self.auth.create_link(self.owner).await.unwrap();
         self.say(&format!("/start {token}")).await;
         self.out.take();
     }
@@ -206,7 +218,7 @@ async fn strangers_are_told_how_to_link_and_nothing_is_saved() {
 #[tokio::test]
 async fn start_link_connects_the_account() {
     let w = world(None).await;
-    let token = w.auth.create_telegram_link(w.owner).await.unwrap();
+    let token = w.auth.create_link(w.owner).await.unwrap();
     w.say(&format!("/start {token}")).await;
     assert!(
         w.out.last_text().contains("تم ربط"),
@@ -214,7 +226,12 @@ async fn start_link_connects_the_account() {
         w.out.last_text()
     );
     assert_eq!(
-        w.auth.user_for_telegram(TG_USER).await.unwrap().unwrap().id,
+        w.auth
+            .user_for(Channel::Telegram, TG_USER)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
         w.owner
     );
 }
@@ -378,7 +395,7 @@ async fn another_users_draft_cannot_be_saved() {
         .await
         .unwrap();
     let other = w.auth.user_for_session(&s).await.unwrap().unwrap();
-    let token = w.auth.create_telegram_link(other.id).await.unwrap();
+    let token = w.auth.create_link(other.id).await.unwrap();
     let intruder = Incoming::Text {
         chat_id: 999,
         from_id: 888,
@@ -445,6 +462,92 @@ async fn short_answers_still_fill_the_form() {
     assert!(
         w.out.last_text().contains("رقم المخطط"),
         "{}",
+        w.out.last_text()
+    );
+}
+
+// ---------- WhatsApp: the same conversation on another channel ----------
+
+const PHONE: i64 = 966_500_000_001;
+
+impl World {
+    async fn say_on(&self, out: &Recorder, from: i64, text: &str) {
+        let msg = Incoming::Text {
+            chat_id: from,
+            from_id: from,
+            text: text.into(),
+        };
+        self.bot.handle(out, msg).await.unwrap();
+    }
+}
+
+#[tokio::test]
+async fn whatsapp_strangers_are_told_to_link_from_the_account_page() {
+    let w = world(Some(FakeAi(Ok(vec![plot("الملقا")])))).await;
+    let wa = Recorder::on(Channel::WhatsApp);
+    w.say_on(&wa, PHONE, "أرض للبيع في الملقا").await;
+    let reply = wa.last_text();
+    assert!(reply.contains("ربط واتساب"), "{reply}");
+    assert!(!reply.contains("تيليجرام"), "{reply}");
+    assert!(w.rows().await.is_empty());
+}
+
+#[tokio::test]
+async fn whatsapp_link_message_connects_the_number_and_leads_are_saved_as_whatsapp() {
+    let w = world(Some(FakeAi(Ok(vec![plot("الملقا")])))).await;
+    let wa = Recorder::on(Channel::WhatsApp);
+    let token = w.auth.create_link(w.owner).await.unwrap();
+    w.say_on(&wa, PHONE, &format!("ربط {token}")).await;
+    assert!(wa.last_text().contains("تم ربط"), "{}", wa.last_text());
+    assert_eq!(
+        w.auth
+            .user_for(Channel::WhatsApp, PHONE)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        w.owner
+    );
+    assert!(
+        w.auth
+            .user_for(Channel::Telegram, PHONE)
+            .await
+            .unwrap()
+            .is_none(),
+        "linking WhatsApp leaves Telegram alone"
+    );
+
+    w.say_on(&wa, PHONE, "للبيع أرض بالملقا على السوم").await;
+    let save = wa.button("حفظ");
+    let msg = Incoming::Callback {
+        chat_id: PHONE,
+        from_id: PHONE,
+        message_id: 0,
+        callback_id: String::new(),
+        data: save,
+    };
+    w.bot.handle(&wa, msg).await.unwrap();
+    let rows = w.rows().await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].source, "whatsapp");
+}
+
+#[tokio::test]
+async fn a_step_by_step_entry_on_telegram_does_not_leak_into_whatsapp() {
+    let w = world(None).await;
+    w.link().await;
+    let wa = Recorder::on(Channel::WhatsApp);
+    let token = w.auth.create_link(w.owner).await.unwrap();
+    // Same numeric id on both channels, on purpose.
+    w.say_on(&wa, CHAT, &format!("ربط {token}")).await;
+
+    w.say("/new").await; // Telegram now waits for the offer type.
+    w.say_on(&wa, CHAT, "/last").await;
+    assert!(wa.last_text().contains("لا توجد عروض"), "{}", wa.last_text());
+    w.say("أرض للبيع").await;
+    assert!(
+        w.out.last_text().contains("رقم المخطط"),
+        "Telegram flow continues: {}",
         w.out.last_text()
     );
 }

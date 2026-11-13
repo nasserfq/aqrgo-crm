@@ -1,6 +1,6 @@
 {% for l in listings %}
 <tr onclick="location.href='/listings/{{ l.id }}'" tabindex="0" onkeydown="if(event.key==='Enter')location.href='/listings/{{ l.id }}'">
-  <td class="num">{{ l.number() }}{% if l.source == "telegram" %}<span class="src" title="أضيف من تيليجرام">✈</span>{% endif %}</td>
+  <td class="num">{{ l.number() }}{% if l.source == "telegram" %}<span class="src" title="أضيف من تيليجرام">✈</span>{% elif l.source == "whatsapp" %}<span class="src" title="أضيف من واتساب">✆</span>{% endif %}</td>
   <td class="strong">{{ l.offer_type }}</td>
   <td>{{ l.plan_no }}</td>
   <td>{{ l.plot_no }}</td>

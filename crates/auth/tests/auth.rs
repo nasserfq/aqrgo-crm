@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use auth::{AuthConfig, AuthError, AuthService, CodeMailer};
+use auth::{AuthConfig, AuthError, AuthService, Channel, CodeMailer};
 
 #[derive(Default, Clone)]
 struct Inbox(Arc<Mutex<Vec<(String, String)>>>);
@@ -186,35 +186,89 @@ async fn one_telegram_account_per_user_via_link_token() {
         .unwrap();
     let user = auth.user_for_session(&s).await.unwrap().unwrap();
 
-    let token = auth.create_telegram_link(user.id).await.unwrap();
+    let token = auth.create_link(user.id).await.unwrap();
     let linked = auth
-        .redeem_telegram_link(&token, 777)
+        .redeem_link(Channel::Telegram, &token, 777)
         .await
         .unwrap()
         .expect("linked");
     assert_eq!(linked.id, user.id);
     assert_eq!(
-        auth.user_for_telegram(777).await.unwrap().unwrap().id,
+        auth.user_for(Channel::Telegram, 777)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
         user.id
     );
     // Tokens are single use.
     assert!(auth
-        .redeem_telegram_link(&token, 888)
+        .redeem_link(Channel::Telegram, &token, 888)
         .await
         .unwrap()
         .is_none());
 
     // Linking a new Telegram account replaces the old one.
-    let token2 = auth.create_telegram_link(user.id).await.unwrap();
-    auth.redeem_telegram_link(&token2, 999)
+    let token2 = auth.create_link(user.id).await.unwrap();
+    auth.redeem_link(Channel::Telegram, &token2, 999)
         .await
         .unwrap()
         .unwrap();
-    assert!(auth.user_for_telegram(777).await.unwrap().is_none());
+    assert!(auth
+        .user_for(Channel::Telegram, 777)
+        .await
+        .unwrap()
+        .is_none());
     assert_eq!(
-        auth.user_for_telegram(999).await.unwrap().unwrap().id,
+        auth.user_for(Channel::Telegram, 999)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
         user.id
     );
+}
+
+#[tokio::test]
+async fn whatsapp_links_separately_from_telegram() {
+    let (auth, _) = setup(AuthConfig::default()).await;
+    let s = auth
+        .sign_in_verified_email("a@example.com", "A")
+        .await
+        .unwrap();
+    let user = auth.user_for_session(&s).await.unwrap().unwrap();
+    let phone = 966_500_000_001;
+
+    assert!(!auth.linked(Channel::WhatsApp, user.id).await.unwrap());
+    let token = auth.create_link(user.id).await.unwrap();
+    auth.redeem_link(Channel::WhatsApp, &token, phone)
+        .await
+        .unwrap()
+        .expect("linked");
+    assert!(auth.linked(Channel::WhatsApp, user.id).await.unwrap());
+    assert!(!auth.linked(Channel::Telegram, user.id).await.unwrap());
+    assert_eq!(
+        auth.user_for(Channel::WhatsApp, phone)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        user.id
+    );
+    assert!(
+        auth.user_for(Channel::Telegram, phone)
+            .await
+            .unwrap()
+            .is_none(),
+        "a phone number is not a Telegram id"
+    );
+
+    auth.unlink(Channel::WhatsApp, user.id).await.unwrap();
+    assert!(auth
+        .user_for(Channel::WhatsApp, phone)
+        .await
+        .unwrap()
+        .is_none());
 }
 
 #[tokio::test]

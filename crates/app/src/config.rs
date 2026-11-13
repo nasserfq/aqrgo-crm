@@ -13,6 +13,8 @@ pub struct Config {
     pub mail_from: Option<String>,
     pub telegram_bot_token: Option<String>,
     pub telegram_webhook_secret: Option<String>,
+    /// WhatsApp Cloud API (Meta): all four are needed to turn WhatsApp on.
+    pub whatsapp: Option<WhatsAppConfig>,
     pub bedrock_model_id: Option<String>,
     /// SES can live in another region than Bedrock (e.g. us-east-2 for email).
     pub ses_region: Option<String>,
@@ -21,6 +23,15 @@ pub struct Config {
     pub typesafe_model: Option<String>,
     /// Use AWS (SES/Bedrock). Off in local development without credentials.
     pub aws_enabled: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct WhatsAppConfig {
+    /// A permanent System User access token with whatsapp_business_messaging.
+    pub token: String,
+    pub phone_number_id: String,
+    pub app_secret: String,
+    pub verify_token: String,
 }
 
 fn opt(key: &str) -> Option<String> {
@@ -42,6 +53,28 @@ impl Config {
                 _ => bail!("TELEGRAM_WEBHOOK_SECRET must be at least 16 characters of A-Z, a-z, 0-9, _ or -"),
             }
         }
+        let whatsapp = match (
+            opt("WHATSAPP_TOKEN"),
+            opt("WHATSAPP_PHONE_NUMBER_ID"),
+            opt("WHATSAPP_APP_SECRET"),
+            opt("WHATSAPP_VERIFY_TOKEN"),
+        ) {
+            (None, None, None, None) => None,
+            (Some(token), Some(phone_number_id), Some(app_secret), Some(verify_token)) => {
+                Some(WhatsAppConfig {
+                    token,
+                    phone_number_id,
+                    app_secret,
+                    verify_token,
+                })
+            }
+            // Secrets are added one by one in GitHub; a half-done setup must not
+            // take the site down, so WhatsApp just stays off until all four exist.
+            _ => {
+                tracing::error!("WhatsApp is off: it needs all of WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_APP_SECRET and WHATSAPP_VERIFY_TOKEN");
+                None
+            }
+        };
         Ok(Self {
             database_url: opt("DATABASE_URL").context("DATABASE_URL is required")?,
             port: opt("PORT")
@@ -63,6 +96,7 @@ impl Config {
             mail_from: opt("MAIL_FROM"),
             telegram_bot_token,
             telegram_webhook_secret,
+            whatsapp,
             bedrock_model_id: opt("BEDROCK_MODEL_ID"),
             ses_region: opt("SES_REGION"),
             typesafe_api_key: opt("TYPESAFE_API_KEY"),

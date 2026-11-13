@@ -57,6 +57,25 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    // WhatsApp: learn the business number for the account page's wa.me link.
+    // The webhook itself is registered once, by hand, in the Meta app dashboard.
+    let wa_api = cfg
+        .whatsapp
+        .as_ref()
+        .map(|w| whatsapp::cloud::CloudApi::new(w.token.clone(), w.phone_number_id.clone()));
+    let mut whatsapp_number = None;
+    if let Some(api) = &wa_api {
+        match api.phone_number().await {
+            Ok(n) => {
+                tracing::info!(number = %n, "whatsapp ready");
+                whatsapp_number = Some(n);
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "whatsapp number lookup failed (check WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID)")
+            }
+        }
+    }
+
     let google = match (&cfg.google_client_id, &cfg.google_client_secret) {
         (Some(id), Some(secret)) => Some(auth::web::GoogleConfig {
             client_id: id.clone(),
@@ -68,6 +87,7 @@ async fn main() -> anyhow::Result<()> {
         public_url: cfg.public_url.clone(),
         google,
         telegram_bot: bot_username,
+        whatsapp_number,
     };
     let modules = Modules::new(
         pool.clone(),
@@ -76,9 +96,15 @@ async fn main() -> anyhow::Result<()> {
         auth_config.clone(),
         web_config,
         tg_api.as_ref().and(cfg.telegram_webhook_secret.clone()),
+        cfg.whatsapp
+            .as_ref()
+            .map(|w| whatsapp::webhook::HookConfig {
+                app_secret: w.app_secret.clone(),
+                verify_token: w.verify_token.clone(),
+            }),
     );
 
-    // Background worker: emails + Telegram updates.
+    // Background worker: emails + Telegram updates + WhatsApp messages.
     let ses = mailer::SesSender {
         client: aws.as_ref().filter(|_| cfg.mail_from.is_some()).map(|a| {
             let mut ses = aws_sdk_sesv2::config::Builder::from(a);
@@ -90,7 +116,7 @@ async fn main() -> anyhow::Result<()> {
         from: cfg.mail_from.clone().unwrap_or_default(),
     };
     let mut worker = mailer::register(jobs.worker(), ses);
-    if let Some(api) = tg_api.clone() {
+    if tg_api.is_some() || wa_api.is_some() {
         let extractor: Option<Arc<dyn ai::LeadExtractor>> = aws.as_ref().map(|a| {
             let model = cfg
                 .bedrock_model_id
@@ -122,15 +148,28 @@ async fn main() -> anyhow::Result<()> {
             extractor,
         );
         let cleanup_bot = bot.clone();
+        let cleanup_pool = pool.clone();
         tokio::spawn(async move {
             loop {
                 if let Err(e) = cleanup_bot.cleanup().await {
                     tracing::warn!(error = %e, "draft cleanup failed");
                 }
+                if let Err(e) = whatsapp::webhook::cleanup(&cleanup_pool).await {
+                    tracing::warn!(error = %e, "whatsapp cleanup failed");
+                }
                 tokio::time::sleep(Duration::from_secs(6 * 3600)).await;
             }
         });
-        worker = telegram::webhook::register(worker, bot, telegram::webhook::TelegramOutbox(api));
+        if let Some(api) = tg_api.clone() {
+            worker = telegram::webhook::register(
+                worker,
+                bot.clone(),
+                telegram::webhook::TelegramOutbox(api),
+            );
+        }
+        if let Some(api) = wa_api.clone() {
+            worker = whatsapp::webhook::register(worker, bot, whatsapp::cloud::CloudOutbox(api));
+        }
     }
     // A few workers side by side, so one slow job doesn't block the rest.
     for _ in 0..3 {

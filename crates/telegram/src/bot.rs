@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ai::LeadExtractor;
-use auth::AuthService;
+use auth::{AuthService, Channel};
 use common::{dates, html_escape, CurrentUser};
 use listings::{
     ListingInput, ListingsService, Source, BUILDING_FIELDS, FIELDS, OFFER_TYPE_SUGGESTIONS,
@@ -37,9 +37,14 @@ pub enum Buttons {
     RemoveReply,
 }
 
-/// Where the bot's replies go. Messages use Telegram's HTML parse mode.
+/// Where the bot's replies go. Messages use Telegram's HTML subset (`<b>`
+/// and escaped text); other channels convert it.
 #[async_trait::async_trait]
 pub trait Outbox: Send + Sync {
+    /// Which chat app this outbox talks to; chat and sender ids are per channel.
+    fn channel(&self) -> Channel {
+        Channel::Telegram
+    }
     async fn send(&self, chat_id: i64, text: &str, buttons: Buttons) -> Result<i32, String>;
     async fn edit(
         &self,
@@ -87,6 +92,29 @@ fn label(key: &str) -> &'static str {
         .find(|(k, _)| *k == key)
         .map(|(_, l)| *l)
         .unwrap_or("")
+}
+
+/// The token in a link message: Telegram's `/start <token>` deep link, or
+/// the `ربط <token>` text that the WhatsApp link pre-fills.
+fn link_token(text: &str) -> Option<&str> {
+    text.strip_prefix("/start ")
+        .or_else(|| text.strip_prefix("ربط "))
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+}
+
+fn link_label(channel: Channel) -> &'static str {
+    match channel {
+        Channel::Telegram => "ربط تيليجرام",
+        Channel::WhatsApp => "ربط واتساب",
+    }
+}
+
+fn source(channel: Channel) -> Source {
+    match channel {
+        Channel::Telegram => Source::Telegram,
+        Channel::WhatsApp => Source::WhatsApp,
+    }
 }
 
 /// Several lines, or a long paragraph: a whole lead rather than one answer.
@@ -235,32 +263,32 @@ impl Bot {
         from: i64,
         text: &str,
     ) -> Result<(), BotError> {
-        if let Some(token) = text.strip_prefix("/start ") {
-            return match self.auth.redeem_telegram_link(token, from).await? {
+        let channel = out.channel();
+        if let Some(token) = link_token(text) {
+            return match self.auth.redeem_link(channel, token, from).await? {
                 Some(user) => {
                     let msg = format!(
-                        "تم ربط حسابك ✅ ({})\n\nأرسل أي عرض أو طلب كما تكتبه في واتساب (أو أعد توجيه الرسالة) وسأرتبه في جدولك، ثم أعرضه عليك قبل الحفظ.",
+                        "تم ربط حسابك ✅ ({})\n\nأرسل أي عرض أو طلب كما تكتبه (أو أعد توجيه الرسالة) وسأرتبه في جدولك، ثم أعرضه عليك قبل الحفظ.",
                         html_escape(&user.email)
                     );
                     self.send(out, chat, &msg, menu()).await.map(|_| ())
                 }
-                None => self
-                    .send(out, chat, "رابط الربط غير صالح أو منتهي. أنشئ رابطاً جديداً من الموقع: حسابي ← ربط تيليجرام.", Buttons::None)
-                    .await
-                    .map(|_| ()),
+                None => {
+                    let msg = format!(
+                        "رابط الربط غير صالح أو منتهي. أنشئ رابطاً جديداً من الموقع: حسابي ← {}.",
+                        link_label(channel)
+                    );
+                    self.send(out, chat, &msg, Buttons::None).await.map(|_| ())
+                }
             };
         }
 
-        let Some(user) = self.auth.user_for_telegram(from).await? else {
-            return self
-                .send(
-                    out,
-                    chat,
-                    "مرحباً 👋 هذا بوت AQRGO CRM.\nلاستخدامه اربط حسابك أولاً: افتح الموقع ← حسابي ← ربط تيليجرام.",
-                    Buttons::None,
-                )
-                .await
-                .map(|_| ());
+        let Some(user) = self.auth.user_for(channel, from).await? else {
+            let msg = format!(
+                "مرحباً 👋 هذا بوت AQRGO CRM.\nلاستخدامه اربط حسابك أولاً: افتح الموقع ← حسابي ← {}.",
+                link_label(channel)
+            );
+            return self.send(out, chat, &msg, Buttons::None).await.map(|_| ());
         };
 
         match text {
@@ -271,8 +299,8 @@ impl Bot {
                     .map(|_| ());
             }
             "/cancel" | CANCEL | "إلغاء" => {
-                let state = self.store.state(chat).await?;
-                self.store.clear_state(chat).await?;
+                let state = self.store.state(out.channel(), chat).await?;
+                self.store.clear_state(out.channel(), chat).await?;
                 // Cancelling a single field edit keeps the draft and its preview;
                 // cancelling the step-by-step flow drops the half-filled draft.
                 if let Some(st) = state {
@@ -296,21 +324,21 @@ impl Bot {
                 let draft = ListingInput::default();
                 let id = self.store.create_draft(user.id, &draft).await?;
                 self.store
-                    .set_state(chat, id, Mode::Guided, "offer_type")
+                    .set_state(out.channel(), chat, id, Mode::Guided, "offer_type")
                     .await?;
                 return self.ask(out, chat, "offer_type").await;
             }
             _ => {}
         }
 
-        if let Some(st) = self.store.state(chat).await? {
+        if let Some(st) = self.store.state(out.channel(), chat).await? {
             // A whole lead pasted mid-form is meant for the AI, not for one field.
             if st.mode == Mode::Guided
                 && self.extractor.is_some()
                 && st.field != "details"
                 && looks_like_full_lead(text)
             {
-                self.store.clear_state(chat).await?;
+                self.store.clear_state(out.channel(), chat).await?;
                 self.store.take_draft(user.id, st.draft_id).await?;
                 return self.on_free_text(out, chat, &user, text).await;
             }
@@ -339,7 +367,7 @@ impl Bot {
         text: &str,
     ) -> Result<(), BotError> {
         let Some(mut draft) = self.store.draft(user.id, st.draft_id).await? else {
-            self.store.clear_state(chat).await?;
+            self.store.clear_state(out.channel(), chat).await?;
             return self.on_free_text(out, chat, user, text).await;
         };
         if text != SKIP {
@@ -368,12 +396,12 @@ impl Bot {
         if st.mode == Mode::Guided {
             if let Some(next) = next_field(&st.field) {
                 self.store
-                    .set_state(chat, st.draft_id, Mode::Guided, next)
+                    .set_state(out.channel(), chat, st.draft_id, Mode::Guided, next)
                     .await?;
                 return self.ask(out, chat, next).await;
             }
         }
-        self.store.clear_state(chat).await?;
+        self.store.clear_state(out.channel(), chat).await?;
         self.send(out, chat, "تمام 👌", Buttons::RemoveReply)
             .await?;
         self.send(
@@ -447,7 +475,7 @@ impl Bot {
         message_id: i32,
         data: &str,
     ) -> Result<(), BotError> {
-        let Some(user) = self.auth.user_for_telegram(from).await? else {
+        let Some(user) = self.auth.user_for(out.channel(), from).await? else {
             return Ok(());
         };
         let mut parts = data.splitn(3, ':');
@@ -469,10 +497,10 @@ impl Bot {
                 let Some(draft) = self.store.take_draft(user.id, id).await? else {
                     return Ok(());
                 };
-                self.store.clear_state(chat).await?;
+                self.store.clear_state(out.channel(), chat).await?;
                 match self
                     .listings
-                    .create(user.id, draft.clone(), Source::Telegram)
+                    .create(user.id, draft.clone(), source(out.channel()))
                     .await
                 {
                     Ok(l) => {
@@ -508,7 +536,7 @@ impl Bot {
             }
             "x" => {
                 if self.store.take_draft(user.id, id).await?.is_some() {
-                    self.store.clear_state(chat).await?;
+                    self.store.clear_state(out.channel(), chat).await?;
                     edit("❌ أُلغي هذا العرض ولم يُحفظ.".into(), Buttons::None).await?;
                 }
                 Ok(())
@@ -536,7 +564,9 @@ impl Bot {
                 let Some(d) = self.store.draft(user.id, id).await? else {
                     return Ok(());
                 };
-                self.store.set_state(chat, id, Mode::Edit, key).await?;
+                self.store
+                    .set_state(out.channel(), chat, id, Mode::Edit, key)
+                    .await?;
                 let current = if key == DATE_FIELD {
                     d.listed_on.map(dates::full_ar_display).unwrap_or_default()
                 } else {

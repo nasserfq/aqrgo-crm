@@ -124,6 +124,10 @@ jobs:
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
       TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+      WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+      WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+      WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
+      WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Copy compose files to the server
@@ -143,7 +147,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: DEPLOY_DIR,APP_DOMAIN,IMAGE,AWS_BEARER_TOKEN_BEDROCK,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,TELEGRAM_BOT_TOKEN,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,TYPESAFE_API_KEY
+          envs: DEPLOY_DIR,APP_DOMAIN,IMAGE,AWS_BEARER_TOKEN_BEDROCK,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,TELEGRAM_BOT_TOKEN,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,TYPESAFE_API_KEY,WHATSAPP_TOKEN,WHATSAPP_PHONE_NUMBER_ID,WHATSAPP_APP_SECRET,WHATSAPP_VERIFY_TOKEN
           script: |
             set -e
             cd "$DEPLOY_DIR"
@@ -158,7 +162,7 @@ jobs:
             # The public address is set here so changing it needs no server edits.
             DOMAIN="$APP_DOMAIN"; PUBLIC_URL="https://$APP_DOMAIN"
             # Secrets kept in GitHub are written into .env so they never live in the repo.
-            for name in DOMAIN PUBLIC_URL AWS_BEARER_TOKEN_BEDROCK AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TELEGRAM_BOT_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET TYPESAFE_API_KEY; do
+            for name in DOMAIN PUBLIC_URL AWS_BEARER_TOKEN_BEDROCK AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TELEGRAM_BOT_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET TYPESAFE_API_KEY WHATSAPP_TOKEN WHATSAPP_PHONE_NUMBER_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN; do
               value="${!name}"
               [ -n "$value" ] || continue
               grep -v "^$name=" .env > .env.new || true

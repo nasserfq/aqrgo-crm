@@ -7,7 +7,7 @@ use sqlx::PgPool;
 
 pub mod config;
 
-pub use config::Config;
+pub use config::{Config, WhatsAppConfig};
 
 /// Runs every module's migrations (each in its own schema).
 pub async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
@@ -16,6 +16,7 @@ pub async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
         (auth::SCHEMA, &auth::MIGRATOR),
         (listings::SCHEMA, &listings::MIGRATOR),
         (telegram::SCHEMA, &telegram::MIGRATOR),
+        (whatsapp::SCHEMA, &whatsapp::MIGRATOR),
     ] {
         common::db::migrate_module(pool, schema, m).await?;
     }
@@ -27,6 +28,8 @@ pub struct Modules {
     pub listings: listings::ListingsService,
     pub jobs: jobs::Jobs,
     pub telegram_secret: Option<String>,
+    pub whatsapp: Option<whatsapp::webhook::HookConfig>,
+    pool: PgPool,
 }
 
 impl Modules {
@@ -37,6 +40,7 @@ impl Modules {
         auth_config: auth::AuthConfig,
         web_config: auth::web::WebConfig,
         telegram_secret: Option<String>,
+        whatsapp: Option<whatsapp::webhook::HookConfig>,
     ) -> Self {
         let auth = auth::AuthService::new(pool.clone(), code_mailer, auth_config);
         Self {
@@ -44,6 +48,8 @@ impl Modules {
             listings: listings::ListingsService::new(pool.clone()),
             jobs,
             telegram_secret,
+            whatsapp,
+            pool,
         }
     }
 }
@@ -114,6 +120,13 @@ pub fn router(m: &Modules) -> Router {
 
     if let Some(secret) = &m.telegram_secret {
         app = app.merge(telegram::webhook::router(m.jobs.clone(), secret.clone()));
+    }
+    if let Some(hook) = &m.whatsapp {
+        app = app.merge(whatsapp::webhook::router(
+            m.jobs.clone(),
+            m.pool.clone(),
+            hook.clone(),
+        ));
     }
     app.layer(tower_http::trace::TraceLayer::new_for_http())
 }
