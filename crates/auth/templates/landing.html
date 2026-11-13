@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}جدول عروضك العقارية من رسائل الواتساب{% endblock %}
+{% block body_class %}landing{% endblock %}
+{% block nav %}
+<div class="topbar-wrap">
+<header class="topbar">
+  <a class="brand" href="/">{% include "logo_mark.html" %}AQRGO <span>CRM</span></a>
+  <nav></nav>
+  <a class="btn" href="/login">تسجيل الدخول</a>
+</header>
+<div class="pixel-band" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+</div>
+{% endblock %}
+{% block content %}
+<section class="l-hero">
+  <div class="l-hero-copy">
+    <h1>الصق رسالة الوسيط.<br><em>نرتبها في جدولك.</em></h1>
+    <p class="lede">أرسل العرض كما وصلك في الواتساب إلى بوت تيليجرام، والذكاء الاصطناعي يوزعه على أعمدة جدول مكتبك.</p>
+    <div class="l-cta">
+      <a class="btn primary big" href="/login">ابدأ الآن</a>
+      <span class="muted">الدخول بحساب Google أو برمز على بريدك</span>
+    </div>
+  </div>
+
+  <div class="l-demo" aria-label="مثال: رسالة وسيط تتحول إلى صف في الجدول">
+    <div class="bubble">
+      <span class="bubble-from">وسيط · واتساب</span>
+      للبيع أرض في حي الملقا<br>
+      مخطط 2456 قطعة 12 و 13<br>
+      المساحة 625م شمالية شارع 20م<br>
+      السعر على السوم<br>
+      للتواصل أبو فهد 0551234870
+    </div>
+    <div class="demo-arrow" aria-hidden="true">{% include "logo_mark.html" %}</div>
+    <div class="sheet demo-sheet">
+      <table class="grid">
+        <thead><tr><th>نوع العرض</th><th>المخطط</th><th>القطعة</th><th>المساحة</th><th>الموقع</th><th>السعر</th><th>الحالة</th></tr></thead>
+        <tbody><tr>
+          <td class="strong">أرض للبيع</td><td>2456</td><td>12 و 13</td><td class="nowrap">625م</td><td>حي الملقا</td><td class="nowrap">على السوم</td><td><span class="pill available">متاح</span></td>
+        </tr></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="l-how reveal">
+  <h2>من رسالة إلى صف في ثلاث خطوات</h2>
+  <ol class="steps">
+    <li><h3>أرسل</h3><p>الصق رسالة العرض في بوت تيليجرام، حتى لو فيها أكثر من قطعة.</p></li>
+    <li><h3>راجع</h3><p>يعرض عليك البوت كل عرض مرتباً، فتحفظه بضغطة أو تعدّله.</p></li>
+    <li><h3>اعمل</h3><p>ابحث في جدولك، اطبعه على A4، أو صدّره إلى Excel.</p></li>
+  </ol>
+</section>
+
+<section class="l-bento reveal">
+  <article class="tile tile-wide tile-dark">
+    <h3>كل التفاصيل في عمودها</h3>
+    <p>المخطط والقطعة والمساحة والواجهات والسعر، وأيضاً الغرف ودورات المياه والأدوار والوحدات والدخل والعقود.</p>
+    <div class="tile-pixels" aria-hidden="true">{% for _ in 0..24 %}<i></i>{% endfor %}</div>
+  </article>
+  <article class="tile tile-soft">
+    <h3>هجري وميلادي</h3>
+    <p>كل عرض يحمل يومه وتاريخه بالتقويمين.</p>
+  </article>
+  <article class="tile">
+    <h3>بحث فوري</h3>
+    <p>اكتب رقم مخطط أو حياً أو جوالاً، والجدول يتصفى وأنت تكتب.</p>
+  </article>
+  <article class="tile tile-wide tile-accent">
+    <h3>بياناتك لك وحدك</h3>
+    <p>لكل حساب جدوله الخاص وبوت تيليجرام مربوط به، والدخول بحساب Google أو برمز يصل بريدك.</p>
+  </article>
+</section>
+
+<section class="l-final reveal">
+  <div class="pixels" aria-hidden="true">{% for _ in 0..40 %}<i></i>{% endfor %}</div>
+  <h2>جرّبه على آخر عرض وصلك</h2>
+  <a class="btn big light" href="/login">ابدأ الآن</a>
+</section>
+
+<footer class="l-foot muted">
+  <span>AQRGO CRM</span>
+  <a class="link" href="/login">تسجيل الدخول</a>
+</footer>
+{% endblock %}

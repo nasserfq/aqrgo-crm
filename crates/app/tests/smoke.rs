@@ -117,8 +117,8 @@ async fn sign_in(app: &Router, inbox: &Inbox, email: &str) -> String {
 async fn sign_in_add_a_row_and_see_it_in_the_table() {
     let (app, inbox) = app().await;
 
-    // Not signed in: sent to the login page.
-    let (status, _, location, _) = call(&app, get("/", None)).await;
+    // Not signed in: private pages send you to the login page.
+    let (status, _, location, _) = call(&app, get("/listings/new", None)).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert_eq!(location.as_deref(), Some("/login"));
 
@@ -181,4 +181,15 @@ async fn account_page_offers_telegram_link() {
     let me = sign_in(&app, &inbox, "nasser@example.com").await;
     let (_, _, _, page) = call(&app, form("/account/telegram", "", Some(&me))).await;
     assert!(page.contains("https://t.me/aqrgo_bot?start="), "{page}");
+}
+
+#[tokio::test]
+async fn signed_out_visitors_see_the_landing_page() {
+    let (app, _) = app().await;
+    let (status, _, _, page) = call(&app, get("/", None)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains(r#"href="/login""#), "a way in");
+    assert!(page.contains("تيليجرام"), "explains the Telegram flow");
+    assert!(!page.contains("بيانات الوسيط"), "no private table");
+    assert!(!page.contains("—"), "no em-dashes");
 }

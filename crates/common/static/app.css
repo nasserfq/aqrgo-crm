@@ -310,3 +310,84 @@ table.grid { border-collapse: collapse; width: 100%; min-width: 1200px; font-siz
   .actions { width: 100%; }
   .actions .btn { flex: 1; }
 }
+
+/* ---------- Landing page ---------- */
+.landing main { max-width: 1240px; margin: 0 auto; padding-top: 0; }
+.landing .topbar nav { flex: 1; }
+.l-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 72px); align-items: center; min-height: min(760px, calc(100dvh - 76px)); padding: 48px 0 64px; }
+.l-hero h1 { font-size: clamp(2rem, 3.6vw, 3.3rem); line-height: 1.25; font-weight: 800; margin: 0 0 18px; animation: rise .8s var(--ease-out) .1s both; }
+.l-hero h1 em { font-style: normal; color: var(--accent); }
+.l-hero .lede { font-size: 1.12rem; color: var(--muted); max-width: 46ch; margin: 0 0 28px; animation: rise .8s var(--ease-out) .2s both; }
+.l-cta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; animation: rise .8s var(--ease-out) .3s both; }
+.l-cta .muted { font-size: 14px; }
+
+/* The demo: a real lead becoming a real row, played once on load. */
+.l-demo { display: grid; gap: 14px; justify-items: start; }
+.bubble { justify-self: end; max-width: 330px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px 14px 4px 14px; padding: 12px 16px; font-size: 14.5px; line-height: 1.8; box-shadow: 0 24px 48px -36px var(--shadow); animation: rise .7s var(--ease-out) .45s both; }
+.bubble-from { display: block; font-size: 12px; font-weight: 600; color: var(--accent); margin-bottom: 4px; }
+.demo-arrow { justify-self: center; animation: rise .5s var(--ease-out) 1.1s both; }
+.demo-arrow .mark { width: 34px; height: 34px; }
+.demo-arrow .mark rect { animation-delay: calc(1.1s + var(--i) * 40ms); }
+.demo-sheet { width: 100%; overflow: hidden; animation: rise .7s var(--ease-out) 1.5s both; }
+.demo-sheet table.grid { min-width: 0; font-size: 13.5px; }
+.demo-sheet .grid tbody tr { cursor: default; animation: highlight 2.4s ease 2s both; }
+@keyframes highlight { 0% { background: var(--l2); } 100% { background: transparent; } }
+
+/* How it works: one statement, three verbs. */
+.l-how { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: clamp(24px, 5vw, 72px); padding: clamp(48px, 8vw, 112px) 0; border-top: 1px solid var(--line); }
+.l-how h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); line-height: 1.3; margin: 0; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 28px; }
+.steps li { display: grid; grid-template-columns: 120px 1fr; gap: 16px; align-items: baseline; padding-bottom: 28px; border-bottom: 1px solid var(--line); }
+.steps li:last-child { border-bottom: 0; padding-bottom: 0; }
+.steps h3 { font-family: var(--display); font-size: 1.6rem; font-weight: 800; color: var(--accent); margin: 0; }
+.steps p { margin: 0; font-size: 1.05rem; color: var(--muted); }
+
+/* Bento: four tiles, four different surfaces. */
+.l-bento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding-bottom: clamp(48px, 8vw, 112px); }
+.tile { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 28px; min-height: 200px; transition: transform .3s var(--ease-out), box-shadow .3s ease; }
+.tile:hover { transform: translateY(-3px); box-shadow: 0 24px 48px -32px var(--shadow); }
+.tile h3 { font-family: var(--display); font-size: 1.35rem; margin: 0 0 10px; }
+.tile p { margin: 0; color: var(--muted); max-width: 48ch; position: relative; }
+.tile-wide { grid-column: span 2; }
+.tile-dark { background: var(--head); color: #f4f1fc; border-color: var(--head-line); }
+.tile-dark p { color: #c9c0e6; }
+.tile-soft { background: var(--accent-soft); border-color: var(--l2); }
+.tile-accent { background: linear-gradient(135deg, var(--l6), var(--l8)); color: #fff; border: 0; }
+.tile-accent p { color: #e6defd; }
+.tile-pixels { position: absolute; inset-inline-end: 24px; bottom: 24px; display: grid; grid-template-columns: repeat(8, 14px); gap: 3px; opacity: .9; }
+.tile-pixels i { width: 14px; height: 14px; display: block; }
+.tile-pixels i:nth-child(5n+1) { background: var(--l3); }
+.tile-pixels i:nth-child(5n+2) { background: var(--l5); }
+.tile-pixels i:nth-child(5n+3) { background: transparent; }
+.tile-pixels i:nth-child(5n+4) { background: var(--l7); }
+.tile-pixels i:nth-child(5n+5) { background: var(--l4); }
+
+/* Final call to action on the pixel field. */
+.l-final { position: relative; overflow: hidden; background: var(--head); color: #f4f1fc; border-radius: var(--radius); padding: clamp(56px, 9vw, 120px) clamp(24px, 5vw, 64px); display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.l-final .pixels { inset: 0; aspect-ratio: auto; grid-template-columns: repeat(10, 1fr); opacity: .5; }
+.l-final .pixels::after { background: linear-gradient(to left, transparent, var(--head) 70%); }
+.l-final h2 { position: relative; font-size: clamp(1.6rem, 3.4vw, 2.6rem); margin: 0; }
+.btn.light { position: relative; background: #f4f1fc; color: #1b1530; border-color: #f4f1fc; }
+.btn.light:hover { background: #fff; }
+.l-foot { display: flex; justify-content: space-between; padding: 28px 0 0; font-size: 14px; }
+
+/* Sections fade up as they scroll in, where the browser supports it. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal { animation: rise linear both; animation-timeline: view(); animation-range: entry 0% cover 25%; }
+  }
+}
+
+@media (max-width: 860px) {
+  .l-hero { grid-template-columns: 1fr; min-height: 0; padding-top: 32px; }
+  .l-how { grid-template-columns: 1fr; }
+  .steps li { grid-template-columns: 1fr; gap: 6px; }
+  .l-bento { grid-template-columns: 1fr; }
+  .tile-wide { grid-column: auto; }
+  .tile-pixels { display: none; }
+}
+@media (max-width: 640px) {
+  .landing .topbar .btn { padding: 8px 14px; }
+  .l-cta .btn { width: 100%; }
+  .demo-sheet th:nth-child(n+5), .demo-sheet td:nth-child(n+5) { display: none; }
+}

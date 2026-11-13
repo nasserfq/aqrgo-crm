@@ -102,6 +102,9 @@ pub async fn require_user(
             req.extensions_mut().insert(user);
             next.run(req).await
         }
+        None if req.method() == axum::http::Method::GET && req.uri().path() == "/" => {
+            render(&LandingPage)
+        }
         None if req.headers().contains_key("hx-request") => {
             (StatusCode::UNAUTHORIZED, [("hx-redirect", "/login")]).into_response()
         }
@@ -122,6 +125,11 @@ fn session_cookie(config: &WebConfig, token: String) -> Cookie<'static> {
 fn time_days(d: i64) -> time::Duration {
     time::Duration::days(d)
 }
+
+/// The public front page, shown at `/` to visitors who are not signed in.
+#[derive(Template)]
+#[template(path = "landing.html")]
+struct LandingPage;
 
 #[derive(Template)]
 #[template(path = "login.html")]
