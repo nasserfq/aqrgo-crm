@@ -314,8 +314,8 @@ table.grid { border-collapse: collapse; width: 100%; min-width: 1200px; font-siz
 /* ---------- Landing page ---------- */
 .landing main { max-width: 1240px; margin: 0 auto; padding-top: 0; }
 .landing .topbar nav { flex: 1; }
-.l-hero { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: clamp(28px, 5vw, 72px); align-items: center; min-height: min(760px, calc(100dvh - 76px)); padding: 48px 0 64px; }
-.l-hero h1 { font-size: clamp(2rem, 3.6vw, 3.3rem); line-height: 1.25; font-weight: 800; margin: 0 0 18px; animation: rise .8s var(--ease-out) .1s both; }
+.l-hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, .9fr); gap: clamp(28px, 5vw, 72px); align-items: center; min-height: min(760px, calc(100dvh - 76px)); padding: 48px 0 64px; }
+.l-hero h1 { font-size: clamp(2rem, 3.4vw, 3.1rem); line-height: 1.25; font-weight: 800; margin: 0 0 18px; animation: rise .8s var(--ease-out) .1s both; }
 .l-hero h1 em { font-style: normal; color: var(--accent); }
 .l-hero .lede { font-size: 1.12rem; color: var(--muted); max-width: 46ch; margin: 0 0 28px; animation: rise .8s var(--ease-out) .2s both; }
 .l-cta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; animation: rise .8s var(--ease-out) .3s both; }
@@ -390,4 +390,26 @@ table.grid { border-collapse: collapse; width: 100%; min-width: 1200px; font-siz
   .landing .topbar .btn { padding: 8px 14px; }
   .l-cta .btn { width: 100%; }
   .demo-sheet th:nth-child(n+5), .demo-sheet td:nth-child(n+5) { display: none; }
+}
+
+/* Telegram section: copy beside a real-looking chat with the bot. */
+.l-tg { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: clamp(28px, 6vw, 88px); align-items: center; padding: clamp(48px, 8vw, 112px) 0; border-top: 1px solid var(--line); }
+.l-tg h2 { font-size: clamp(1.7rem, 3.2vw, 2.6rem); margin: 0 0 12px; }
+.l-tg .lede { color: var(--muted); font-size: 1.08rem; margin: 0 0 24px; max-width: 48ch; }
+.ticks { list-style: none; margin: 0 0 28px; padding: 0; display: grid; gap: 14px; }
+.ticks li { position: relative; padding-inline-start: 30px; color: var(--muted); }
+.ticks li b { color: var(--ink); }
+.ticks li::before { content: ""; position: absolute; inset-inline-start: 0; top: .45em; width: 14px; height: 14px; background: linear-gradient(135deg, var(--l4), var(--l7)); }
+.tg-phone { background: #17212b; border-radius: 22px; padding: 14px 14px 20px; box-shadow: 0 40px 80px -40px var(--shadow); display: grid; gap: 10px; max-width: 380px; justify-self: center; width: 100%; }
+.tg-head { display: flex; align-items: center; gap: 10px; color: #fff; padding: 4px 6px 12px; border-bottom: 1px solid #22303d; }
+.tg-head .mark { width: 30px; height: 30px; background: #1b1530; padding: 5px; border-radius: 50%; }
+.tg-head small { display: block; color: #7d8b99; font-size: 12px; }
+.tg-msg { max-width: 86%; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.7; color: #e9eef3; animation: rise .5s var(--ease-out) both; }
+.tg-msg.me { justify-self: start; background: #2b5278; border-end-start-radius: 4px; animation-delay: .2s; }
+.tg-msg.bot { justify-self: end; background: #182533; border: 1px solid #22303d; border-end-end-radius: 4px; animation-delay: .9s; }
+.tg-msg.small { animation-delay: 1.6s; font-size: 13px; }
+.tg-keys { display: flex; gap: 6px; margin-top: 8px; }
+.tg-keys span { flex: 1; text-align: center; background: #2b3a4a; border-radius: 6px; padding: 5px; font-size: 12.5px; }
+@media (max-width: 860px) {
+  .l-tg { grid-template-columns: 1fr; }
 }

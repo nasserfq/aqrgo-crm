@@ -14,8 +14,8 @@
 {% block content %}
 <section class="l-hero">
   <div class="l-hero-copy">
-    <h1>الصق رسالة الوسيط.<br><em>نرتبها في جدولك.</em></h1>
-    <p class="lede">أرسل العرض كما وصلك في الواتساب إلى بوت تيليجرام، والذكاء الاصطناعي يوزعه على أعمدة جدول مكتبك.</p>
+    <h1>الصق العرض في تيليجرام.<br><em>نرتبه في جدولك.</em></h1>
+    <p class="lede">انسخ رسالة الوسيط من الواتساب وأرسلها لبوت تيليجرام. لا نماذج ولا خانات، والذكاء الاصطناعي يوزعها على أعمدة جدولك.</p>
     <div class="l-cta">
       <a class="btn primary big" href="/login">ابدأ الآن</a>
       <span class="muted">الدخول بحساب Google أو برمز على بريدك</span>
@@ -24,7 +24,7 @@
 
   <div class="l-demo" aria-label="مثال: رسالة وسيط تتحول إلى صف في الجدول">
     <div class="bubble">
-      <span class="bubble-from">وسيط · واتساب</span>
+      <span class="bubble-from">أنت ← بوت AQRGO على تيليجرام</span>
       للبيع أرض في حي الملقا<br>
       مخطط 2456 قطعة 12 و 13<br>
       المساحة 625م شمالية شارع 20م<br>
@@ -34,19 +34,42 @@
     <div class="demo-arrow" aria-hidden="true">{% include "logo_mark.html" %}</div>
     <div class="sheet demo-sheet">
       <table class="grid">
-        <thead><tr><th>نوع العرض</th><th>المخطط</th><th>القطعة</th><th>المساحة</th><th>الموقع</th><th>السعر</th><th>الحالة</th></tr></thead>
+        <thead><tr><th>نوع العرض</th><th>المخطط</th><th>القطعة</th><th>المساحة</th><th>السعر</th><th>الحالة</th></tr></thead>
         <tbody><tr>
-          <td class="strong">أرض للبيع</td><td>2456</td><td>12 و 13</td><td class="nowrap">625م</td><td>حي الملقا</td><td class="nowrap">على السوم</td><td><span class="pill available">متاح</span></td>
+          <td class="strong">أرض للبيع</td><td>2456</td><td>12 و 13</td><td class="nowrap">625م</td><td class="nowrap">على السوم</td><td><span class="pill available">متاح</span></td>
         </tr></tbody>
       </table>
     </div>
   </div>
 </section>
 
+<section class="l-tg reveal">
+  <div class="l-tg-copy">
+    <h2>مكتبك كله داخل تيليجرام</h2>
+    <p class="lede">التطبيق الذي تستخدمه كل يوم صار مدخل جدولك. لا برنامج تثبته ولا شيء تتعلمه.</p>
+    <ul class="ticks">
+      <li><b>رسالة واحدة تكفي.</b> الصقها كما هي، حتى لو فيها أكثر من قطعة أو عمارة.</li>
+      <li><b>يفهم العامية.</b> «على السوم» و«دورين ونص» و«مباشر مع الوكيل» تدخل في أماكنها.</li>
+      <li><b>أنت صاحب القرار.</b> البوت يعرض كل عرض مرتباً قبل حفظه، فتؤكد أو تعدّل بضغطة.</li>
+      <li><b>من جوالك في أي مكان.</b> في السيارة أو في الموقع، والجدول على الموقع يتحدث فوراً.</li>
+    </ul>
+    <a class="btn primary big" href="/login">ابدأ الآن</a>
+  </div>
+  <div class="tg-phone" aria-label="مثال لمحادثة مع بوت تيليجرام">
+    <div class="tg-head">{% include "logo_mark.html" %}<div><b>AQRGO</b><small>بوت</small></div></div>
+    <div class="tg-msg me">عمارة للبيع حي الخليج 7 شقق دورين ونص مصعد، دخل 600 ألف، السعر 7.2 مليون</div>
+    <div class="tg-msg bot">
+      <b>عمارة للبيع</b><br>الموقع: حي الخليج<br>الأدوار: دورين ونص · الوحدات: 7 شقق<br>الدخل: 600 ألف · السعر: 7.2 مليون
+      <div class="tg-keys"><span>✓ حفظ</span><span>تعديل</span></div>
+    </div>
+    <div class="tg-msg bot small">تم الحفظ في جدولك ✓</div>
+  </div>
+</section>
+
 <section class="l-how reveal">
   <h2>من رسالة إلى صف في ثلاث خطوات</h2>
   <ol class="steps">
-    <li><h3>أرسل</h3><p>الصق رسالة العرض في بوت تيليجرام، حتى لو فيها أكثر من قطعة.</p></li>
+    <li><h3>أرسل</h3><p>اربط حسابك بتيليجرام مرة واحدة، ثم الصق أي عرض في البوت.</p></li>
     <li><h3>راجع</h3><p>يعرض عليك البوت كل عرض مرتباً، فتحفظه بضغطة أو تعدّله.</p></li>
     <li><h3>اعمل</h3><p>ابحث في جدولك، اطبعه على A4، أو صدّره إلى Excel.</p></li>
   </ol>
