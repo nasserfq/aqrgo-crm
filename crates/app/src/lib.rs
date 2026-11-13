@@ -48,8 +48,6 @@ impl Modules {
     }
 }
 
-const APP_CSS: &str = include_str!("../../common/static/app.css");
-
 const LOGO_SVG: &str = include_str!("../../common/static/logo.svg");
 const LOGO_PNG: &[u8] = include_bytes!("../../common/static/logo.png");
 
@@ -67,9 +65,10 @@ async fn css() -> impl IntoResponse {
     (
         [
             (header::CONTENT_TYPE, "text/css; charset=utf-8"),
-            (header::CACHE_CONTROL, "public, max-age=3600"),
+            // Pages link a versioned URL, so each version can be cached for good.
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
         ],
-        APP_CSS,
+        common::ui::CSS,
     )
 }
 

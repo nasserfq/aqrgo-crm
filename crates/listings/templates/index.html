@@ -5,7 +5,7 @@
 <section class="page-head no-print">
   <div>
     <h1>جدول العروض</h1>
-    <p class="muted count">العروض: {{ listings.len() }}{% if !q.is_empty() || !status.is_empty() %} مطابق للبحث{% endif %}</p>
+    <p class="muted count">العروض: <b data-count="{{ listings.len() }}">{{ listings.len() }}</b>{% if !q.is_empty() || !status.is_empty() %} مطابق للبحث{% endif %}</p>
   </div>
   <a class="btn primary big" href="/listings/new">＋ إضافة عرض</a>
 </section>
