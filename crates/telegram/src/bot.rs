@@ -89,6 +89,11 @@ fn label(key: &str) -> &'static str {
         .unwrap_or("")
 }
 
+/// Several lines, or a long paragraph: a whole lead rather than one answer.
+fn looks_like_full_lead(text: &str) -> bool {
+    text.lines().filter(|l| !l.trim().is_empty()).count() >= 3 || text.chars().count() > 150
+}
+
 fn menu() -> Buttons {
     Buttons::Reply(vec![vec![MENU_NEW.into()], vec![MENU_LAST.into()]])
 }
@@ -299,6 +304,16 @@ impl Bot {
         }
 
         if let Some(st) = self.store.state(chat).await? {
+            // A whole lead pasted mid-form is meant for the AI, not for one field.
+            if st.mode == Mode::Guided
+                && self.extractor.is_some()
+                && st.field != "details"
+                && looks_like_full_lead(text)
+            {
+                self.store.clear_state(chat).await?;
+                self.store.take_draft(user.id, st.draft_id).await?;
+                return self.on_free_text(out, chat, &user, text).await;
+            }
             return self.on_field_value(out, chat, &user, st, text).await;
         }
         self.on_free_text(out, chat, &user, text).await

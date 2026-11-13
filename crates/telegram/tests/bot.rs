@@ -415,3 +415,36 @@ async fn cancelling_a_field_edit_keeps_the_draft() {
     w.tap(&save).await;
     assert_eq!(w.rows().await.len(), 1, "draft survived the cancelled edit");
 }
+
+#[tokio::test]
+async fn pasting_a_full_lead_during_the_form_hands_it_to_the_ai() {
+    let w = world(Some(FakeAi(Ok(vec![plot("الملقا")])))).await;
+    w.link().await;
+    w.say("/new").await;
+    assert!(w.out.last_text().contains("نوع العرض"));
+
+    w.say("للبيع عمارة سكنية حي الخليج\nمساحة 875م\nدورين ونص\nمصعد راكب\nالبيع 7 مليون")
+        .await;
+    let preview = w.out.last_text();
+    assert!(
+        preview.contains("مسودة") && preview.contains("الملقا"),
+        "AI draft shown, not the next form question: {preview}"
+    );
+
+    // The half-filled form is gone: a short reply is read as a new message.
+    w.tap(&w.out.button("حفظ")).await;
+    assert_eq!(w.rows().await.len(), 1);
+}
+
+#[tokio::test]
+async fn short_answers_still_fill_the_form() {
+    let w = world(Some(FakeAi(Ok(vec![plot("الملقا")])))).await;
+    w.link().await;
+    w.say("/new").await;
+    w.say("عمارة للبيع").await;
+    assert!(
+        w.out.last_text().contains("رقم المخطط"),
+        "{}",
+        w.out.last_text()
+    );
+}
