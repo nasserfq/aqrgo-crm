@@ -16,6 +16,9 @@ pub struct Config {
     pub bedrock_model_id: Option<String>,
     /// SES can live in another region than Bedrock (e.g. us-east-2 for email).
     pub ses_region: Option<String>,
+    /// TypeSafe Jev: typed judgments around Bedrock extraction (optional).
+    pub typesafe_api_key: Option<String>,
+    pub typesafe_model: Option<String>,
     /// Use AWS (SES/Bedrock). Off in local development without credentials.
     pub aws_enabled: bool,
 }
@@ -62,6 +65,8 @@ impl Config {
             telegram_webhook_secret,
             bedrock_model_id: opt("BEDROCK_MODEL_ID"),
             ses_region: opt("SES_REGION"),
+            typesafe_api_key: opt("TYPESAFE_API_KEY"),
+            typesafe_model: opt("TYPESAFE_MODEL"),
             aws_enabled: opt("AWS_REGION").is_some(),
         })
     }
