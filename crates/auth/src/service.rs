@@ -1,3 +1,4 @@
+use askama::Template;
 use std::sync::Arc;
 
 use common::CurrentUser;
@@ -37,22 +38,48 @@ pub trait CodeMailer: Send + Sync {
 }
 
 /// Queues the login-code email on the mailer's background job.
-pub struct MailerCodeSender(pub mailer::Mailer);
+pub struct MailerCodeSender {
+    pub mailer: mailer::Mailer,
+    /// Public site address, used for the logo and link in the email.
+    pub public_url: String,
+}
 
 #[async_trait::async_trait]
 impl CodeMailer for MailerCodeSender {
     async fn send_login_code(&self, email: &str, code: &str) -> Result<(), String> {
-        let text = format!(
-            "رمز الدخول إلى AQRGO CRM هو: {code}\n\nالرمز صالح لمدة {CODE_TTL_MINUTES} دقائق. إذا لم تطلبه فتجاهل هذه الرسالة.\n\nYour AQRGO CRM sign-in code is {code}"
-        );
-        self.0
-            .queue(&mailer::Email {
-                to: email.to_string(),
-                subject: format!("رمز الدخول: {code}"),
-                text,
-            })
+        self.mailer
+            .queue(&login_code_email(email, code, &self.public_url))
             .await
             .map_err(|e| e.to_string())
+    }
+}
+
+#[derive(Template)]
+#[template(path = "email_code.html")]
+struct CodeEmailHtml<'a> {
+    code: &'a str,
+    minutes: i32,
+    public_url: &'a str,
+}
+
+/// The branded sign-in email: Arabic RTL HTML plus a plain-text fallback.
+pub fn login_code_email(to: &str, code: &str, public_url: &str) -> mailer::Email {
+    let public_url = public_url.trim_end_matches('/');
+    let text = format!(
+        "رمز الدخول إلى AQRGO CRM هو: {code}\n\nالرمز صالح لمدة {CODE_TTL_MINUTES} دقائق. إذا لم تطلبه فتجاهل هذه الرسالة.\n\nYour AQRGO CRM sign-in code is {code}"
+    );
+    let html = CodeEmailHtml {
+        code,
+        minutes: CODE_TTL_MINUTES,
+        public_url,
+    }
+    .render()
+    .ok();
+    mailer::Email {
+        to: to.to_string(),
+        subject: format!("رمز الدخول: {code}"),
+        text,
+        html,
     }
 }
 

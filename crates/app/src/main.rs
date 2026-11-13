@@ -34,7 +34,10 @@ async fn main() -> anyhow::Result<()> {
 
     let jobs = jobs::Jobs::new(pool.clone());
     let mailer = mailer::Mailer::new(jobs.clone());
-    let code_mailer: Arc<dyn auth::CodeMailer> = Arc::new(auth::MailerCodeSender(mailer));
+    let code_mailer: Arc<dyn auth::CodeMailer> = Arc::new(auth::MailerCodeSender {
+        mailer,
+        public_url: cfg.public_url.clone(),
+    });
     let auth_config = auth::AuthConfig {
         allowed_emails: cfg.allowed_emails.clone(),
     };

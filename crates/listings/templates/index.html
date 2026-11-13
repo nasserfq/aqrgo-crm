@@ -2,11 +2,21 @@
 {% block title %}العروض{% endblock %}
 {% block nav %}{% include "nav.html" %}{% endblock %}
 {% block content %}
+<section class="page-head no-print">
+  <div>
+    <h1>جدول العروض</h1>
+    <p class="muted count">العروض: {{ listings.len() }}{% if !q.is_empty() || !status.is_empty() %} مطابق للبحث{% endif %}</p>
+  </div>
+  <a class="btn primary big" href="/listings/new">＋ إضافة عرض</a>
+</section>
+
 <section class="toolbar no-print">
-  <form id="filters" class="filters" action="/" method="get"
+  <form id="filters" class="filters" action="/" method="get" role="search"
         hx-get="/rows" hx-target="#rows" hx-trigger="input changed delay:300ms from:input, change from:select" hx-push-url="false">
-    <input type="search" name="q" value="{{ q }}" placeholder="بحث: رقم مخطط، حي، اسم، جوال…" autocomplete="off">
-    <select name="status">
+    <label class="sr-only" for="q">بحث</label>
+    <input id="q" type="search" name="q" value="{{ q }}" placeholder="بحث: رقم مخطط، حي، اسم، جوال…" autocomplete="off">
+    <label class="sr-only" for="status">الحالة</label>
+    <select id="status" name="status">
       <option value="">كل الحالات</option>
       {% for st in statuses %}
       <option value="{{ st.as_str() }}" {% if status == st.as_str() %}selected{% endif %}>{{ st.label_ar() }}</option>
@@ -14,7 +24,6 @@
     </select>
   </form>
   <div class="actions">
-    <a class="btn primary" href="/listings/new">＋ إضافة عرض</a>
     <a class="btn" href="/export.csv" onclick="this.href='/export.csv?'+new URLSearchParams(new FormData(document.getElementById('filters')))">تصدير Excel</a>
     <button class="btn" type="button" onclick="window.print()">طباعة</button>
   </div>

@@ -271,3 +271,22 @@ async fn removing_an_email_from_the_allow_list_ends_its_sessions() {
         .unwrap()
         .is_none());
 }
+
+#[test]
+fn login_code_email_is_branded_arabic_html_with_a_text_fallback() {
+    let email = auth::login_code_email("nasser@example.com", "694953", "https://aqrgo.com");
+    assert_eq!(email.to, "nasser@example.com");
+    assert!(email.subject.contains("694953"));
+    assert!(
+        email.text.contains("694953"),
+        "plain-text fallback keeps the code"
+    );
+    let html = email.html.expect("html body");
+    assert!(html.contains(r#"dir="rtl""#));
+    assert!(html.contains("694953"));
+    assert!(
+        html.contains("https://aqrgo.com/static/logo.png"),
+        "logo is an absolute URL"
+    );
+    assert!(!html.contains("—"), "no em-dashes");
+}

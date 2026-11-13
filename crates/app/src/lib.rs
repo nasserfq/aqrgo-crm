@@ -50,6 +50,19 @@ impl Modules {
 
 const APP_CSS: &str = include_str!("../../common/static/app.css");
 
+const LOGO_SVG: &str = include_str!("../../common/static/logo.svg");
+const LOGO_PNG: &[u8] = include_bytes!("../../common/static/logo.png");
+
+fn asset(content_type: &'static str, body: impl IntoResponse) -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CACHE_CONTROL, "public, max-age=86400"),
+        ],
+        body,
+    )
+}
+
 async fn css() -> impl IntoResponse {
     (
         [
@@ -72,6 +85,18 @@ pub fn router(m: &Modules) -> Router {
     let mut app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/static/app.css", get(css))
+        .route(
+            "/static/logo.svg",
+            get(|| async { asset("image/svg+xml", LOGO_SVG) }),
+        )
+        .route(
+            "/favicon.ico",
+            get(|| async { asset("image/svg+xml", LOGO_SVG) }),
+        )
+        .route(
+            "/static/logo.png",
+            get(|| async { asset("image/png", LOGO_PNG) }),
+        )
         .merge(auth::web::public_router(m.auth_web.clone()))
         .merge(protected);
 
