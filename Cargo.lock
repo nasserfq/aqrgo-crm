@@ -21,7 +21,9 @@ dependencies = [
  "chrono",
  "common",
  "listings",
+ "reqwest",
  "serde_json",
+ "tokio",
  "tracing",
 ]
 

@@ -96,6 +96,8 @@ pub fn parse_tool_input(input: &Value, today: NaiveDate) -> Vec<ListingInput> {
         .collect()
 }
 
+pub mod jev;
+
 pub struct BedrockExtractor {
     client: aws_sdk_bedrockruntime::Client,
     model_id: String,

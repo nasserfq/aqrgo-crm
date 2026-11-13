@@ -11,7 +11,7 @@ See [docs/spec.md](docs/spec.md) for what was agreed.
 | `listings` | schema `listings` | Property rows, search, Excel export, table pages |
 | `auth` | schema `auth` | Google sign-in, 6-digit email codes, sessions, Telegram linking |
 | `telegram` | schema `telegram` | Bot conversation, drafts, webhook |
-| `ai` | — | Amazon Bedrock lead extraction |
+| `ai` | — | Amazon Bedrock lead extraction, plus optional TypeSafe Jev judgments (is it a lead, الحالة) |
 | `jobs` | schema `jobs` | Postgres job queue + worker |
 | `mailer` | — | Sends email via AWS SES from a job |
 | `common` | — | Shared types, Hijri dates, Arabic digits, layout |
@@ -54,6 +54,7 @@ Every push to `main` runs the tests, builds the Docker image on GitHub, pushes i
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | AWS user for SES email. Each deploy writes them into the server `.env` |
 | `TELEGRAM_BOT_TOKEN` | Token from @BotFather |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google sign-in |
+| `TYPESAFE_API_KEY` | Optional TypeSafe Jev key: skips messages that aren't leads and reads الحالة from the message |
 | `AWS_BEARER_TOKEN_BEDROCK` | Optional Bedrock API key. Each deploy writes it into the server `.env` |
 
 Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment called `production` if you want to approve each deploy.
