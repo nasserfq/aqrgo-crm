@@ -35,6 +35,9 @@ fn system_prompt(today: NaiveDate) -> String {
 - location: الحي والمدينة أو أي وصف للموقع، ورابط الخريطة إن وجد.\n\
 - price: السعر كما ورد (إجمالي أو سعر المتر، مع «على السوم» إن ذُكر).\n\
 - seller بيانات البائع/المالك، buyer بيانات المشتري، broker بيانات الوسيط: الاسم ورقم الجوال.\n\
+- rooms عدد الغرف، bathrooms عدد دورات المياه، floors عدد الأدوار (مثل «دورين ونص»)، units عدد الشقق أو المحلات أو الوحدات.\n\
+- income: الدخل والإيجار والعقود القائمة (مثل «عقد واحد مع شركة 5 سنوات بقيمة 600 ألف دفعتين»).\n\
+- details: كل معلومة أخرى لم تدخل في الخانات السابقة (المصعد، التشطيب، عمر العقار، المساحات، طريقة البيع، مباشر أو وسيط…)، كل معلومة في سطر قصير. لا تُسقط أي معلومة من الرسالة.\n\
 - listed_on: تاريخ العرض بصيغة YYYY-MM-DD إن ذُكر صراحة، وإلا فاتركه فارغاً. تاريخ اليوم {today}.\n\
 - إذا لم تكن الرسالة عرضاً عقارياً فأرجع قائمة فارغة.\n\
 استدعِ الأداة {TOOL_NAME} مرة واحدة بالنتيجة.",
@@ -231,6 +234,28 @@ mod tests {
         assert_eq!(rows[0].listed_on, Some(today()), "missing date = today");
         assert_eq!(rows[1].listed_on, NaiveDate::from_ymd_opt(2026, 11, 1));
         assert_eq!(rows[1].price, "");
+    }
+
+    #[test]
+    fn keeps_building_details() {
+        let input = json!({ "listings": [
+            { "offer_type": "عمارة للبيع", "location": "حي الخليج", "rooms": "44", "bathrooms": "33",
+              "floors": "دورين ونص", "units": "7 شقق", "income": "600 ألف سنوياً",
+              "details": "مصعد راكب\nمباشر مع الوكيل" }
+        ]});
+        let rows = parse_tool_input(&input, today());
+        assert_eq!(rows[0].rooms, "44");
+        assert_eq!(rows[0].units, "7 شقق");
+        assert!(rows[0].details.contains("مصعد"));
+    }
+
+    #[test]
+    fn schema_asks_for_every_column() {
+        let s = input_schema();
+        let props = &s["properties"]["listings"]["items"]["properties"];
+        for key in ["rooms", "bathrooms", "floors", "units", "income", "details"] {
+            assert!(props.get(key).is_some(), "{key} in schema");
+        }
     }
 
     #[test]

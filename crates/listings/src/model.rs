@@ -16,7 +16,7 @@ pub const OFFER_TYPE_SUGGESTIONS: &[&str] = &[
 ];
 
 /// The free-text columns, in the order of the original Word table, then the
-/// two columns added later. (key, Arabic label)
+/// columns added later. (key, Arabic label)
 pub const FIELDS: &[(&str, &str)] = &[
     ("offer_type", "نوع العرض"),
     ("plan_no", "رقم المخطط"),
@@ -28,7 +28,17 @@ pub const FIELDS: &[(&str, &str)] = &[
     ("buyer", "بيانات المشتري"),
     ("seller", "بيانات البائع"),
     ("broker", "بيانات الوسيط"),
+    ("rooms", "عدد الغرف"),
+    ("bathrooms", "دورات المياه"),
+    ("floors", "الأدوار"),
+    ("units", "الوحدات"),
+    ("income", "الدخل والعقود"),
+    ("details", "تفاصيل إضافية"),
 ];
+
+/// Building details the step-by-step Telegram flow doesn't ask one by one
+/// (they can still be filled from a message or edited).
+pub const BUILDING_FIELDS: &[&str] = &["rooms", "bathrooms", "floors", "units", "income"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -93,6 +103,18 @@ pub struct ListingInput {
     pub buyer: String,
     pub seller: String,
     pub broker: String,
+    #[serde(default)]
+    pub rooms: String,
+    #[serde(default)]
+    pub bathrooms: String,
+    #[serde(default)]
+    pub floors: String,
+    #[serde(default)]
+    pub units: String,
+    #[serde(default)]
+    pub income: String,
+    #[serde(default)]
+    pub details: String,
     pub listed_on: Option<NaiveDate>,
     #[serde(default)]
     pub status: Status,
@@ -111,6 +133,12 @@ impl ListingInput {
             "buyer" => &self.buyer,
             "seller" => &self.seller,
             "broker" => &self.broker,
+            "rooms" => &self.rooms,
+            "bathrooms" => &self.bathrooms,
+            "floors" => &self.floors,
+            "units" => &self.units,
+            "income" => &self.income,
+            "details" => &self.details,
             _ => "",
         }
     }
@@ -127,6 +155,12 @@ impl ListingInput {
             "buyer" => &mut self.buyer,
             "seller" => &mut self.seller,
             "broker" => &mut self.broker,
+            "rooms" => &mut self.rooms,
+            "bathrooms" => &mut self.bathrooms,
+            "floors" => &mut self.floors,
+            "units" => &mut self.units,
+            "income" => &mut self.income,
+            "details" => &mut self.details,
             _ => return,
         };
         *slot = value;
@@ -160,6 +194,12 @@ pub struct Listing {
     pub buyer: String,
     pub seller: String,
     pub broker: String,
+    pub rooms: String,
+    pub bathrooms: String,
+    pub floors: String,
+    pub units: String,
+    pub income: String,
+    pub details: String,
     pub listed_on: NaiveDate,
     pub status: String,
     pub source: String,
@@ -203,6 +243,12 @@ impl Listing {
             buyer: self.buyer.clone(),
             seller: self.seller.clone(),
             broker: self.broker.clone(),
+            rooms: self.rooms.clone(),
+            bathrooms: self.bathrooms.clone(),
+            floors: self.floors.clone(),
+            units: self.units.clone(),
+            income: self.income.clone(),
+            details: self.details.clone(),
             listed_on: Some(self.listed_on),
             status: self.status(),
         }

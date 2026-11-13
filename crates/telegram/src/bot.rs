@@ -3,7 +3,9 @@ use std::sync::Arc;
 use ai::LeadExtractor;
 use auth::AuthService;
 use common::{dates, html_escape, CurrentUser};
-use listings::{ListingInput, ListingsService, Source, FIELDS, OFFER_TYPE_SUGGESTIONS};
+use listings::{
+    ListingInput, ListingsService, Source, BUILDING_FIELDS, FIELDS, OFFER_TYPE_SUGGESTIONS,
+};
 use sqlx::PgPool;
 
 use crate::store::{Mode, Store};
@@ -148,14 +150,14 @@ fn field_prompt_buttons(key: &str) -> Buttons {
 
 /// The order the step-by-step flow asks in.
 fn next_field(current: &str) -> Option<&'static str> {
-    let mut keys = FIELDS.iter().map(|(k, _)| *k).chain([DATE_FIELD]);
-    keys.position(|k| k == current).and_then(|i| {
-        FIELDS
-            .iter()
-            .map(|(k, _)| *k)
-            .chain([DATE_FIELD])
-            .nth(i + 1)
-    })
+    let steps: Vec<&'static str> = FIELDS
+        .iter()
+        .map(|(k, _)| *k)
+        .filter(|k| !BUILDING_FIELDS.contains(k))
+        .chain([DATE_FIELD])
+        .collect();
+    let i = steps.iter().position(|k| *k == current)?;
+    steps.get(i + 1).copied()
 }
 
 fn summary_line(l: &listings::Listing) -> String {
@@ -550,7 +552,12 @@ mod tests {
     #[test]
     fn guided_order_ends_with_the_date() {
         assert_eq!(next_field("offer_type"), Some("plan_no"));
-        assert_eq!(next_field("broker"), Some(DATE_FIELD));
+        assert_eq!(
+            next_field("broker"),
+            Some("details"),
+            "building details aren't asked one by one"
+        );
+        assert_eq!(next_field("details"), Some(DATE_FIELD));
         assert_eq!(next_field(DATE_FIELD), None);
     }
 }

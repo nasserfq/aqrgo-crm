@@ -9,7 +9,9 @@ mod model;
 mod service;
 pub mod web;
 
-pub use model::{Listing, ListingInput, Source, Status, FIELDS, OFFER_TYPE_SUGGESTIONS};
+pub use model::{
+    Listing, ListingInput, Source, Status, BUILDING_FIELDS, FIELDS, OFFER_TYPE_SUGGESTIONS,
+};
 pub use service::{Filter, ListingsError, ListingsService};
 
 pub const SCHEMA: &str = "listings";

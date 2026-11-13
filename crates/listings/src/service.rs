@@ -17,7 +17,7 @@ pub struct Filter {
 }
 
 const COLUMNS: &str = "id, ref_no, offer_type, plan_no, plot_no, area, frontages, location, price, buyer, seller, broker, \
-                       listed_on, status, source";
+                       rooms, bathrooms, floors, units, income, details, listed_on, status, source";
 
 /// The only way other modules read or write listings.
 #[derive(Clone)]
@@ -48,7 +48,7 @@ impl ListingsService {
             "SELECT {COLUMNS} FROM listings.listings
              WHERE owner_id = $3
                AND ($1::text IS NULL OR concat_ws(' ', ref_no::text, offer_type, plan_no, plot_no, area, frontages,
-                    location, price, buyer, seller, broker) ILIKE $1)
+                    location, price, buyer, seller, broker, rooms, bathrooms, floors, units, income, details) ILIKE $1)
                AND ($2::text IS NULL OR status = $2)
              ORDER BY listed_on DESC, id DESC
              LIMIT 2000"
@@ -91,8 +91,8 @@ impl ListingsService {
         let i = input.normalized().map_err(ListingsError::Invalid)?;
         let sql = format!(
             "INSERT INTO listings.listings (offer_type, plan_no, plot_no, area, frontages, location, price, buyer,
-                seller, broker, listed_on, status, owner_id, source, ref_no)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,
+                seller, broker, listed_on, status, owner_id, source, rooms, bathrooms, floors, units, income, details, ref_no)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
                      (SELECT COALESCE(MAX(ref_no), 0) + 1 FROM listings.listings WHERE owner_id = $13))
              RETURNING {COLUMNS}"
         );
@@ -118,6 +118,12 @@ impl ListingsService {
             .bind(i.status.as_str())
             .bind(owner)
             .bind(source.as_str())
+            .bind(&i.rooms)
+            .bind(&i.bathrooms)
+            .bind(&i.floors)
+            .bind(&i.units)
+            .bind(&i.income)
+            .bind(&i.details)
             .fetch_one(&mut *tx)
             .await?;
         tx.commit().await?;
@@ -133,7 +139,8 @@ impl ListingsService {
         let i = input.normalized().map_err(ListingsError::Invalid)?;
         let sql = format!(
             "UPDATE listings.listings SET offer_type=$2, plan_no=$3, plot_no=$4, area=$5, frontages=$6,
-                location=$7, price=$8, buyer=$9, seller=$10, broker=$11, listed_on=$12, status=$13, updated_at=now()
+                location=$7, price=$8, buyer=$9, seller=$10, broker=$11, listed_on=$12, status=$13,
+                rooms=$15, bathrooms=$16, floors=$17, units=$18, income=$19, details=$20, updated_at=now()
              WHERE id = $1 AND owner_id = $14
              RETURNING {COLUMNS}"
         );
@@ -152,6 +159,12 @@ impl ListingsService {
             .bind(i.listed_on.unwrap_or_else(common::dates::today_riyadh))
             .bind(i.status.as_str())
             .bind(owner)
+            .bind(&i.rooms)
+            .bind(&i.bathrooms)
+            .bind(&i.floors)
+            .bind(&i.units)
+            .bind(&i.income)
+            .bind(&i.details)
             .fetch_optional(&self.pool)
             .await?)
     }

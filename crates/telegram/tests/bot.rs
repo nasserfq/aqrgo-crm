@@ -330,6 +330,12 @@ async fn step_by_step_with_skips() {
         w.say("⏭ تخطي").await; // price, buyer, seller, broker
     }
     assert!(
+        w.out.last_text().contains("تفاصيل إضافية"),
+        "{}",
+        w.out.last_text()
+    );
+    w.say("مصعد وتشطيب حديث").await; // details
+    assert!(
         w.out.last_text().contains("التاريخ"),
         "{}",
         w.out.last_text()
@@ -337,7 +343,7 @@ async fn step_by_step_with_skips() {
     w.say("اليوم").await;
     let preview = w.out.last_text();
     assert!(
-        preview.contains("فيلا للبيع") && preview.contains("حي النرجس"),
+        preview.contains("فيلا للبيع") && preview.contains("حي النرجس") && preview.contains("مصعد"),
         "{preview}"
     );
     w.tap(&w.out.button("حفظ")).await;
