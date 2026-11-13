@@ -1,6 +1,8 @@
 //! Server-rendered pages for the listings table. Expects `auth` middleware
 //! to have put a `common::CurrentUser` into the request extensions.
 
+use std::collections::HashMap;
+
 use askama::Template;
 use axum::{
     extract::{Path, Query, State},
@@ -103,7 +105,10 @@ impl FormPage {
     }
 
     fn is_multiline(&self, key: &str) -> bool {
-        matches!(key, "frontages" | "buyer" | "seller" | "broker")
+        matches!(
+            key,
+            "frontages" | "buyer" | "seller" | "broker" | "income" | "details"
+        )
     }
 }
 
@@ -190,50 +195,25 @@ async fn edit_form(
     }
 }
 
+/// The posted form: every column in [`FIELDS`] plus date and status.
 #[derive(Deserialize)]
-struct ListingForm {
-    #[serde(default)]
-    offer_type: String,
-    #[serde(default)]
-    plan_no: String,
-    #[serde(default)]
-    plot_no: String,
-    #[serde(default)]
-    area: String,
-    #[serde(default)]
-    frontages: String,
-    #[serde(default)]
-    location: String,
-    #[serde(default)]
-    price: String,
-    #[serde(default)]
-    buyer: String,
-    #[serde(default)]
-    seller: String,
-    #[serde(default)]
-    broker: String,
-    #[serde(default)]
-    listed_on: String,
-    #[serde(default)]
-    status: String,
-}
+#[serde(transparent)]
+struct ListingForm(HashMap<String, String>);
 
 impl From<ListingForm> for ListingInput {
-    fn from(f: ListingForm) -> Self {
-        ListingInput {
-            offer_type: f.offer_type,
-            plan_no: f.plan_no,
-            plot_no: f.plot_no,
-            area: f.area,
-            frontages: f.frontages,
-            location: f.location,
-            price: f.price,
-            buyer: f.buyer,
-            seller: f.seller,
-            broker: f.broker,
-            listed_on: NaiveDate::parse_from_str(&f.listed_on, "%Y-%m-%d").ok(),
-            status: Status::parse(&f.status).unwrap_or_default(),
+    fn from(ListingForm(mut f): ListingForm) -> Self {
+        let mut input = ListingInput::default();
+        for (key, _) in FIELDS {
+            input.set(key, f.remove(*key).unwrap_or_default());
         }
+        input.listed_on = f
+            .get("listed_on")
+            .and_then(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").ok());
+        input.status = f
+            .get("status")
+            .and_then(|s| Status::parse(s))
+            .unwrap_or_default();
+        input
     }
 }
 
@@ -379,6 +359,12 @@ mod tests {
             buyer: "".into(),
             seller: "".into(),
             broker: "".into(),
+            rooms: "44".into(),
+            bathrooms: "".into(),
+            floors: "".into(),
+            units: "".into(),
+            income: "".into(),
+            details: "مصعد".into(),
             listed_on: NaiveDate::from_ymd_opt(2026, 11, 13).unwrap(),
             status: "sold".into(),
             source: "web".into(),
@@ -388,5 +374,6 @@ mod tests {
         assert!(csv.contains("\"'=cmd\""));
         assert!(csv.contains("\"شمالية \"\"30م\"\"\""));
         assert!(csv.contains("\"مباع\""));
+        assert!(csv.contains("\"عدد الغرف\"") && csv.contains("\"مصعد\""));
     }
 }

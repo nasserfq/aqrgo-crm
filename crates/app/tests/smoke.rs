@@ -132,8 +132,8 @@ async fn sign_in_add_a_row_and_see_it_in_the_table() {
     assert!(page.contains("dir=\"rtl\""));
 
     let row = format!(
-        "offer_type={}&plan_no=2456&plot_no=12&area=625&frontages=&location={}&price={}&buyer=&seller=&broker=&listed_on=2026-11-13&status=available",
-        enc("أرض للبيع"), enc("حي الملقا"), enc("على السوم")
+        "offer_type={}&plan_no=2456&plot_no=12&area=625&frontages=&location={}&price={}&buyer=&seller=&broker=&rooms=44&details={}&listed_on=2026-11-13&status=available",
+        enc("أرض للبيع"), enc("حي الملقا"), enc("على السوم"), enc("مصعد راكب")
     );
     let (status, _, location, _) = call(&app, form("/listings/new", &row, Some(&me))).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
@@ -143,6 +143,10 @@ async fn sign_in_add_a_row_and_see_it_in_the_table() {
     assert!(page.contains("حي الملقا"));
     assert!(page.contains("الجمعة"), "weekday shown for 13 Nov 2026");
     assert!(page.contains("١"), "row number in Arabic digits");
+    assert!(
+        page.contains("عدد الغرف") && page.contains("مصعد راكب"),
+        "extra details shown"
+    );
 
     let (_, _, _, csv) = call(&app, get("/export.csv", Some(&me))).await;
     assert!(csv.contains("حي الملقا"));

@@ -169,3 +169,33 @@ async fn simultaneous_saves_all_get_their_own_number() {
     numbers.sort();
     assert_eq!(numbers, (1..=12).collect::<Vec<_>>());
 }
+
+#[tokio::test]
+async fn keeps_building_details_and_finds_them() {
+    let svc = service().await;
+    let input = ListingInput {
+        offer_type: "عمارة للبيع".into(),
+        location: "حي الخليج - شرق الرياض".into(),
+        rooms: "٤٤".into(),
+        bathrooms: "33".into(),
+        floors: "دورين ونص".into(),
+        units: "7 شقق".into(),
+        income: "عقد واحد 5 سنوات بقيمة 600 ألف دفعتين".into(),
+        details: "مصعد راكب\nتشطيب حديث\nمباشر مع الوكيل".into(),
+        ..Default::default()
+    };
+    let saved = svc.create(1, input, Source::Telegram).await.unwrap();
+    let got = svc.get(1, saved.id).await.unwrap().unwrap().to_input();
+    assert_eq!(got.rooms, "44", "digits normalised like other columns");
+    assert_eq!(got.bathrooms, "33");
+    assert_eq!(got.floors, "دورين ونص");
+    assert_eq!(got.units, "7 شقق");
+    assert!(got.income.contains("600"));
+    assert!(got.details.contains("مصعد"));
+
+    let filter = Filter {
+        q: Some("مصعد".into()),
+        ..Default::default()
+    };
+    assert_eq!(svc.list(1, &filter).await.unwrap().len(), 1);
+}
