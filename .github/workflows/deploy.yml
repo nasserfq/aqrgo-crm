@@ -90,7 +90,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          source: "deploy/docker-compose.yml,deploy/Caddyfile,deploy/.env.example"
+          source: "deploy/docker-compose.yml,deploy/.env.example"
           target: ${{ env.DEPLOY_DIR }}
           strip_components: 1
       - name: Pull the new image and restart
@@ -128,11 +128,17 @@ jobs:
             docker compose up -d --remove-orphans
             docker logout ghcr.io
             docker image prune -f
+            healthy=""
             for i in $(seq 1 30); do
               if docker compose exec -T app curl -fsS http://localhost:8080/healthz >/dev/null 2>&1; then
-                echo "Deployed $IMAGE"; exit 0
+                healthy=1; break
               fi
               sleep 2
             done
-            docker compose logs --tail 80 app
-            exit 1
+            if [ -z "$healthy" ]; then docker compose logs --tail 80 app; exit 1; fi
+            # Route crm.aqrgo.com (with HTTPS) to the app through the shared kamal-proxy.
+            DOMAIN=$(grep '^DOMAIN=' .env | cut -d= -f2-)
+            docker exec kamal-proxy kamal-proxy deploy aqrgo-crm \
+              --target aqrgo-crm-app:8080 --host "${DOMAIN:-crm.aqrgo.com}" --tls \
+              --health-check-path /healthz
+            echo "Deployed $IMAGE
