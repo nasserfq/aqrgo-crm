@@ -264,10 +264,24 @@ impl Bot {
                     .map(|_| ());
             }
             "/cancel" | CANCEL | "إلغاء" => {
-                if let Some(st) = self.store.state(chat).await? {
+                let state = self.store.state(chat).await?;
+                self.store.clear_state(chat).await?;
+                // Cancelling a single field edit keeps the draft and its preview;
+                // cancelling the step-by-step flow drops the half-filled draft.
+                if let Some(st) = state {
+                    if st.mode == Mode::Edit {
+                        return self
+                            .send(
+                                out,
+                                chat,
+                                "تم إلغاء التعديل. المسودة كما هي.",
+                                Buttons::RemoveReply,
+                            )
+                            .await
+                            .map(|_| ());
+                    }
                     self.store.take_draft(user.id, st.draft_id).await?;
                 }
-                self.store.clear_state(chat).await?;
                 return self.send(out, chat, "تم الإلغاء.", menu()).await.map(|_| ());
             }
             "/last" | MENU_LAST => return self.last(out, chat, &user).await,
@@ -463,7 +477,16 @@ impl Bot {
                         )
                         .await
                     }
-                    Err(e) => Err(e.into()),
+                    Err(e) => {
+                        // Put the draft back so the lead isn't lost, and let them retry.
+                        let id = self.store.create_draft(user.id, &draft).await?;
+                        edit(
+                            format!("⚠️ تعذر الحفظ، حاول مرة أخرى.\n\n{}", preview_text(&draft)),
+                            preview_buttons(id),
+                        )
+                        .await?;
+                        Err(e.into())
+                    }
                 }
             }
             "x" => {

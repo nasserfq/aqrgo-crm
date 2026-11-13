@@ -32,7 +32,8 @@ async fn app() -> (Router, Inbox) {
         telegram_bot: Some("aqrgo_bot".into()),
     };
     let modules = app::Modules::new(
-        pool,
+        pool.clone(),
+        jobs::Jobs::new(pool),
         Arc::new(inbox.clone()),
         auth::AuthConfig::default(),
         web,

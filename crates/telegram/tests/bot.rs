@@ -396,3 +396,16 @@ async fn another_users_draft_cannot_be_saved() {
         .unwrap()
         .is_empty());
 }
+
+#[tokio::test]
+async fn cancelling_a_field_edit_keeps_the_draft() {
+    let w = world(Some(FakeAi(Ok(vec![plot("الملقا")])))).await;
+    w.link().await;
+    w.say("أرض بالملقا").await;
+    let save = w.out.button("حفظ");
+    w.tap(&w.out.button("تعديل")).await;
+    w.tap(&w.out.button("السعر")).await;
+    w.say("❌ إلغاء").await;
+    w.tap(&save).await;
+    assert_eq!(w.rows().await.len(), 1, "draft survived the cancelled edit");
+}

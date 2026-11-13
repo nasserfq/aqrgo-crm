@@ -100,6 +100,8 @@ jobs:
             cd "$DEPLOY_DIR"
             test -f .env || { echo "Missing $DEPLOY_DIR/.env (copy .env.example and fill it in)"; exit 1; }
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+            # Remember the deployed image so a manual `docker compose up` uses it too.
+            if grep -q '^APP_IMAGE=' .env; then sed -i "s|^APP_IMAGE=.*|APP_IMAGE=$IMAGE|" .env; else echo "APP_IMAGE=$IMAGE" >> .env; fi
             export APP_IMAGE="$IMAGE"
             docker compose pull app
             docker compose up -d --remove-orphans

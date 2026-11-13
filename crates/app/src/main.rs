@@ -68,6 +68,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let modules = Modules::new(
         pool.clone(),
+        jobs.clone(),
         code_mailer,
         auth_config.clone(),
         web_config,
@@ -113,7 +114,10 @@ async fn main() -> anyhow::Result<()> {
         });
         worker = telegram::webhook::register(worker, bot, telegram::webhook::TelegramOutbox(api));
     }
-    tokio::spawn(worker.run());
+    // A few workers side by side, so one slow job doesn't block the rest.
+    for _ in 0..3 {
+        tokio::spawn(worker.clone().run());
+    }
 
     let app = app::router(&modules);
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", cfg.port)).await?;

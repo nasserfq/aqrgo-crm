@@ -96,7 +96,14 @@ impl ListingsService {
                      (SELECT COALESCE(MAX(ref_no), 0) + 1 FROM listings.listings WHERE owner_id = $13))
              RETURNING {COLUMNS}"
         );
-        Ok(sqlx::query_as::<_, Listing>(&sql)
+        // Serialise inserts per owner so two saves at once (web + Telegram)
+        // never pick the same running number.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtext('listings.ref_no'), $1::int)")
+            .bind((owner % i32::MAX as i64) as i32)
+            .execute(&mut *tx)
+            .await?;
+        let listing = sqlx::query_as::<_, Listing>(&sql)
             .bind(&i.offer_type)
             .bind(&i.plan_no)
             .bind(&i.plot_no)
@@ -111,8 +118,10 @@ impl ListingsService {
             .bind(i.status.as_str())
             .bind(owner)
             .bind(source.as_str())
-            .fetch_one(&self.pool)
-            .await?)
+            .fetch_one(&mut *tx)
+            .await?;
+        tx.commit().await?;
+        Ok(listing)
     }
 
     pub async fn update(

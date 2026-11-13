@@ -216,3 +216,58 @@ async fn one_telegram_account_per_user_via_link_token() {
         user.id
     );
 }
+
+#[tokio::test]
+async fn a_burst_of_parallel_guesses_still_gets_only_five_tries() {
+    let (auth, inbox) = setup(AuthConfig::default()).await;
+    auth.request_code("a@example.com").await.unwrap();
+    let wrong = if inbox.last_code() == "000000" {
+        "111111"
+    } else {
+        "000000"
+    };
+    let mut handles = Vec::new();
+    for _ in 0..20 {
+        let auth = auth.clone();
+        handles.push(tokio::spawn(async move {
+            auth.verify_code("a@example.com", wrong).await
+        }));
+    }
+    let mut checked = 0;
+    for h in handles {
+        if matches!(h.await.unwrap(), Err(AuthError::InvalidCode)) {
+            checked += 1;
+        }
+    }
+    assert!(checked <= 5, "{checked} guesses were checked");
+}
+
+#[tokio::test]
+async fn removing_an_email_from_the_allow_list_ends_its_sessions() {
+    let pool = testkit::fresh_pool().await;
+    common::db::migrate_module(&pool, auth::SCHEMA, &auth::MIGRATOR)
+        .await
+        .unwrap();
+    let open = AuthService::new(
+        pool.clone(),
+        Arc::new(Inbox::default()),
+        AuthConfig::default(),
+    );
+    let session = open
+        .sign_in_verified_email("old@example.com", "x")
+        .await
+        .unwrap();
+
+    let restricted = AuthService::new(
+        pool,
+        Arc::new(Inbox::default()),
+        AuthConfig {
+            allowed_emails: vec!["boss@aqrgo.com".into()],
+        },
+    );
+    assert!(restricted
+        .user_for_session(&session)
+        .await
+        .unwrap()
+        .is_none());
+}

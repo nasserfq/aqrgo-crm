@@ -151,3 +151,21 @@ async fn rejects_an_empty_row() {
         .await
         .is_err());
 }
+
+#[tokio::test]
+async fn simultaneous_saves_all_get_their_own_number() {
+    let svc = service().await;
+    let mut handles = Vec::new();
+    for i in 0..12 {
+        let svc = svc.clone();
+        handles.push(tokio::spawn(async move {
+            svc.create(1, land(&format!("حي {i}")), Source::Web).await
+        }));
+    }
+    let mut numbers = Vec::new();
+    for h in handles {
+        numbers.push(h.await.unwrap().expect("every save succeeds").ref_no);
+    }
+    numbers.sort();
+    assert_eq!(numbers, (1..=12).collect::<Vec<_>>());
+}

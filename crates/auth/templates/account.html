@@ -9,13 +9,13 @@
   <h2>ربط تيليجرام</h2>
   {% if let Some(bot) = telegram_bot %}
     {% if telegram_linked %}
-      <p class="ok">✓ حساب تيليجرام مربوط. أرسل العروض إلى <a href="https://t.me/{{ bot }}" dir="ltr">@{{ bot }}</a> وستظهر في جدولك.</p>
+      <p class="ok">✓ حساب تيليجرام مربوط. أرسل العروض إلى <a href="https://t.me/{{ bot }}" dir="ltr">@{{ bot }}</a> وسأعرض عليك كل عرض لتأكيده قبل حفظه في جدولك.</p>
       <form method="post" action="/account/telegram/unlink" onsubmit="return confirm('إلغاء ربط تيليجرام؟')">
         <button class="btn danger" type="submit">إلغاء الربط</button>
       </form>
       <p class="muted">لربط حساب تيليجرام آخر بدلاً منه:</p>
     {% else %}
-      <p>اربط حساب تيليجرام لترسل العروض للبوت فتُضاف لجدولك تلقائياً.</p>
+      <p>اربط حساب تيليجرام لترسل العروض للبوت، فيرتبها ويعرضها عليك للتأكيد ثم يحفظها في جدولك.</p>
     {% endif %}
     {% if let Some(url) = link_url %}
       <a class="btn primary" href="{{ url }}" target="_blank" rel="noopener">افتح تيليجرام واضغط «ابدأ»</a>

@@ -32,6 +32,7 @@ pub struct Modules {
 impl Modules {
     pub fn new(
         pool: PgPool,
+        jobs: jobs::Jobs,
         code_mailer: Arc<dyn auth::CodeMailer>,
         auth_config: auth::AuthConfig,
         web_config: auth::web::WebConfig,
@@ -41,7 +42,7 @@ impl Modules {
         Self {
             auth_web: auth::web::AuthWeb::new(auth, web_config),
             listings: listings::ListingsService::new(pool.clone()),
-            jobs: jobs::Jobs::new(pool),
+            jobs,
             telegram_secret,
         }
     }

@@ -106,6 +106,9 @@ struct Claimed {
     max_attempts: i32,
 }
 
+/// Cloneable, so several copies can run side by side (a slow AI call then
+/// doesn't hold up login emails).
+#[derive(Clone)]
 pub struct Worker {
     jobs: Jobs,
     handlers: HashMap<String, Handler>,
@@ -199,11 +202,15 @@ impl Worker {
         Ok(true)
     }
 
-    /// Re-queues jobs stuck in `running` (e.g. the app crashed mid-job) and
+    /// Re-queues jobs stuck in `running` (e.g. the app crashed mid-job) unless
+    /// they used their last attempt (so a run-once job never runs twice), and
     /// deletes finished jobs older than a week.
     async fn housekeeping(&self) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "UPDATE jobs.jobs SET status = 'queued', locked_at = NULL, updated_at = now()
+            "UPDATE jobs.jobs SET
+                status = CASE WHEN attempts >= max_attempts THEN 'failed' ELSE 'queued' END,
+                last_error = COALESCE(last_error, 'interrupted (app restarted mid-job)'),
+                locked_at = NULL, updated_at = now()
              WHERE status = 'running' AND locked_at < now() - interval '15 minutes'",
         )
         .execute(&self.jobs.pool)

@@ -184,26 +184,31 @@ impl AuthService {
             .chars()
             .filter(|c| c.is_ascii_digit())
             .collect();
-        let row: Option<(i64, String, i32)> = sqlx::query_as(
-            "SELECT id, code_hash, attempts FROM auth.login_codes
+        let row: Option<(i64, String)> = sqlx::query_as(
+            "SELECT id, code_hash FROM auth.login_codes
              WHERE email = $1 AND used_at IS NULL AND expires_at > now()
              ORDER BY created_at DESC LIMIT 1",
         )
         .bind(&email)
         .fetch_optional(&self.pool)
         .await?;
-        let Some((id, hash, attempts)) = row else {
+        let Some((id, hash)) = row else {
             return Err(AuthError::InvalidCode);
         };
-        if attempts >= MAX_ATTEMPTS {
+        // Reserve one attempt atomically before checking, so a burst of
+        // parallel guesses can't all slip under the limit.
+        let reserved = sqlx::query(
+            "UPDATE auth.login_codes SET attempts = attempts + 1 WHERE id = $1 AND attempts < $2",
+        )
+        .bind(id)
+        .bind(MAX_ATTEMPTS)
+        .execute(&self.pool)
+        .await?;
+        if reserved.rows_affected() == 0 {
             return Err(AuthError::TooManyAttempts);
         }
         let given = sha256_hex(&format!("{email}:{code}"));
         if !bool::from(given.as_bytes().ct_eq(hash.as_bytes())) {
-            sqlx::query("UPDATE auth.login_codes SET attempts = attempts + 1 WHERE id = $1")
-                .bind(id)
-                .execute(&self.pool)
-                .await?;
             return Err(AuthError::InvalidCode);
         }
         let used = sqlx::query(
@@ -270,7 +275,8 @@ impl AuthService {
         .bind(sha256_hex(token))
         .fetch_optional(&self.pool)
         .await?;
-        Ok(row.map(Into::into))
+        // An email removed from ALLOWED_EMAILS loses its existing sessions too.
+        Ok(row.filter(|u| self.config.allows(&u.email)).map(Into::into))
     }
 
     pub async fn sign_out(&self, token: &str) -> Result<(), AuthError> {
@@ -336,7 +342,7 @@ impl AuthService {
                 .bind(telegram_id)
                 .fetch_optional(&self.pool)
                 .await?;
-        Ok(row.map(Into::into))
+        Ok(row.filter(|u| self.config.allows(&u.email)).map(Into::into))
     }
 
     pub async fn telegram_linked(&self, user_id: i64) -> Result<bool, AuthError> {
