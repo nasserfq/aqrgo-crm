@@ -41,7 +41,7 @@ Every push to `main` runs the tests, builds the Docker image on GitHub, pushes i
 
 1. Point `crm.aqrgo.com` (A record) at the server's IP. Open ports 80 and 443.
 2. `sudo mkdir -p /opt/aqrgo-crm && sudo chown $USER /opt/aqrgo-crm`
-3. Copy `deploy/.env.example` to `/opt/aqrgo-crm/.env` and fill it in (see below).
+3. The first deploy creates `/opt/aqrgo-crm/.env` from `deploy/.env.example` with a generated database password and webhook secret. Keys kept as GitHub secrets (AWS, Telegram, Google) are written into it on every deploy.
 
 **GitHub repository settings → Secrets and variables → Actions:**
 
@@ -52,6 +52,8 @@ Every push to `main` runs the tests, builds the Docker image on GitHub, pushes i
 | `SSH_KEY` | Private SSH key for that user |
 | `SSH_PORT` | Optional, default 22 |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | AWS user for SES email. Each deploy writes them into the server `.env` |
+| `TELEGRAM_BOT_TOKEN` | Token from @BotFather |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google sign-in |
 | `AWS_BEARER_TOKEN_BEDROCK` | Optional Bedrock API key. Each deploy writes it into the server `.env` |
 
 Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment called `production` if you want to approve each deploy.
