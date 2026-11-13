@@ -1,2 +1,8 @@
 /target
 .env
+
+# End-to-end tests
+e2e/node_modules/
+e2e/report/
+e2e/test-results/
+e2e/server.log
