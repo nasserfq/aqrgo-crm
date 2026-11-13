@@ -2,3 +2,6 @@ target
 .git
 .env
 deploy
+e2e/node_modules
+e2e/report
+e2e/test-results
