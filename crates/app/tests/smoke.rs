@@ -193,3 +193,14 @@ async fn signed_out_visitors_see_the_landing_page() {
     assert!(!page.contains("بيانات الوسيط"), "no private table");
     assert!(!page.contains("—"), "no em-dashes");
 }
+
+#[tokio::test]
+async fn stylesheet_url_changes_with_its_content_so_phones_never_keep_old_styles() {
+    let (app, _) = app().await;
+    let (_, _, _, page) = call(&app, get("/", None)).await;
+    let v = common::ui::CSS_VERSION;
+    assert!(
+        page.contains(&format!("/static/app.css?v={v}")),
+        "versioned stylesheet link"
+    );
+}

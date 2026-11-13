@@ -11,11 +11,32 @@
 <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v={{ common::ui::CSS_VERSION }}">
 </head>
 <body class="{% block body_class %}{% endblock %}">
 {% block nav %}{% endblock %}
 {% block aside %}{% endblock %}
 <main>{% block content %}{% endblock %}</main>
+<script>
+(function () {
+  var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Count up to each number marked with data-count.
+  document.querySelectorAll('[data-count]').forEach(function (el) {
+    var end = parseInt(el.dataset.count, 10);
+    if (still || !(end > 1)) return;
+    var t0 = performance.now(), dur = Math.min(900, 300 + end * 40);
+    (function tick(now) {
+      var p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(end * e);
+      if (p < 1) requestAnimationFrame(tick);
+    })(t0);
+  });
+  // Show that a submit is in progress.
+  document.addEventListener('submit', function (ev) {
+    var b = ev.target.querySelector('button[type=submit], button:not([type])');
+    if (b && !ev.defaultPrevented) b.classList.add('is-busy');
+  });
+})();
+</script>
 </body>
 </html>

@@ -148,17 +148,17 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a
 table.grid { border-collapse: collapse; width: 100%; min-width: 1200px; font-size: 14px; }
 .grid th, .grid td { border: 1px solid var(--line); padding: 9px 11px; text-align: right; vertical-align: top; }
 .grid thead th { background: var(--head); color: #f4f1fc; border-color: var(--head-line); font-weight: 600; white-space: nowrap; position: sticky; top: 0; font-size: 13px; }
-.grid tbody tr { cursor: pointer; transition: background-color .15s ease; animation: rise .45s var(--ease-out) both; }
-.grid tbody tr:nth-child(1) { animation-delay: 30ms; }
-.grid tbody tr:nth-child(2) { animation-delay: 60ms; }
-.grid tbody tr:nth-child(3) { animation-delay: 90ms; }
-.grid tbody tr:nth-child(4) { animation-delay: 120ms; }
-.grid tbody tr:nth-child(5) { animation-delay: 150ms; }
-.grid tbody tr:nth-child(6) { animation-delay: 180ms; }
-.grid tbody tr:nth-child(7) { animation-delay: 210ms; }
-.grid tbody tr:nth-child(n+8) { animation-delay: 240ms; }
+.grid tbody tr { cursor: pointer; transition: background-color .2s ease, box-shadow .25s var(--ease-out); animation: row-in .6s var(--ease-out) both; }
+.grid tbody tr:nth-child(1) { animation-delay: 120ms; }
+.grid tbody tr:nth-child(2) { animation-delay: 180ms; }
+.grid tbody tr:nth-child(3) { animation-delay: 240ms; }
+.grid tbody tr:nth-child(4) { animation-delay: 300ms; }
+.grid tbody tr:nth-child(5) { animation-delay: 360ms; }
+.grid tbody tr:nth-child(6) { animation-delay: 420ms; }
+.grid tbody tr:nth-child(7) { animation-delay: 480ms; }
+.grid tbody tr:nth-child(n+8) { animation-delay: 540ms; }
 .grid tbody tr:nth-child(even) { background: var(--zebra); }
-.grid tbody tr:hover { background: var(--accent-soft); }
+.grid tbody tr:hover { background: var(--accent-soft); box-shadow: inset -4px 0 0 var(--accent); }
 .grid tbody tr:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
 .grid .num { width: 44px; text-align: center; font-weight: 700; white-space: nowrap; font-family: var(--display); color: var(--accent-deep); }
 .grid .strong { font-weight: 600; }
@@ -274,7 +274,11 @@ table.grid { border-collapse: collapse; width: 100%; min-width: 1200px; font-siz
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* Keep the fades, drop the movement. */
+  @keyframes rise { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes pop { from { opacity: 0; } to { opacity: 1; } }
+  .pixels i, .pixel-band i { animation-iteration-count: 1 !important; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .2s; }
 }
 
 @media print {
@@ -413,3 +417,51 @@ table.grid { border-collapse: collapse; width: 100%; min-width: 1200px; font-siz
 @media (max-width: 860px) {
   .l-tg { grid-template-columns: 1fr; }
 }
+
+/* ---------- Motion layer ---------- */
+@keyframes row-in { from { opacity: 0; transform: translateY(18px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes wave { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(3); } }
+@keyframes slide-in { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+@keyframes slide-out { to { opacity: 0; transform: translateX(24px); } }
+@keyframes blink { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+
+/* Page changes slide softly instead of flashing white (Chrome, Edge, Safari 18.2+). */
+@view-transition { navigation: auto; }
+.topbar-wrap { view-transition-name: topbar; }
+::view-transition-old(root) { animation: slide-out .25s var(--ease-out) both; }
+::view-transition-new(root) { animation: slide-in .45s var(--ease-out) both; }
+
+/* While search results load, the pixel band ripples. */
+body:has(.htmx-request) .pixel-band i { animation: wave .9s ease-in-out infinite; transform-origin: top; }
+body:has(.htmx-request) .pixel-band i:nth-child(2n) { animation-delay: .1s; }
+body:has(.htmx-request) .pixel-band i:nth-child(3n) { animation-delay: .2s; }
+body:has(.htmx-request) .pixel-band i:nth-child(4n) { animation-delay: .3s; }
+
+/* Status pills pop in after their row. */
+.grid tbody .pill { animation: pop .4s var(--ease-out) .5s both; }
+
+/* The listings count ticks up (see the script in base.html). */
+.count b { font-variant-numeric: tabular-nums; color: var(--ink); }
+
+/* Buttons show they are working after a submit. */
+.btn.is-busy { pointer-events: none; }
+.btn.is-busy::after { content: ""; width: 18px; height: 6px; background:
+  linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px, currentColor 7px 11px, transparent 11px 14px, currentColor 14px 18px);
+  animation: blink .7s ease-in-out infinite; }
+
+/* Fields lift a little when you focus them. */
+.field:focus-within > span { color: var(--accent); transition: color .2s ease; }
+.field input, .field textarea, .field select { transition: border-color .2s ease, box-shadow .25s var(--ease-out), transform .25s var(--ease-out); }
+.field:focus-within input, .field:focus-within textarea { transform: translateY(-1px); }
+
+/* Cards and the account page settle in. */
+.card { animation: rise .6s var(--ease-out) .05s both; }
+.card h2, .card p, .card form { animation: rise .6s var(--ease-out) both; }
+.card h2 { animation-delay: .15s; }
+.card p { animation-delay: .2s; }
+.card form { animation-delay: .25s; }
+.ok { animation: pop .5s var(--ease-out) .3s both; }
+
+/* Hover lift for every button. */
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: translateY(0) scale(.97); }
