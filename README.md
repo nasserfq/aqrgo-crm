@@ -51,6 +51,7 @@ Every push to `main` runs the tests, builds the Docker image on GitHub, pushes i
 | `SSH_USER` | User that can run `docker` |
 | `SSH_KEY` | Private SSH key for that user |
 | `SSH_PORT` | Optional, default 22 |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | AWS user for SES email. Each deploy writes them into the server `.env` |
 | `AWS_BEARER_TOKEN_BEDROCK` | Optional Bedrock API key. Each deploy writes it into the server `.env` |
 
 Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment called `production` if you want to approve each deploy.
