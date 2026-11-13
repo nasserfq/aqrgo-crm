@@ -75,6 +75,7 @@ jobs:
     env:
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aqrgo-crm' }}
       IMAGE: ${{ needs.build.outputs.image }}:${{ github.sha }}
+      AWS_BEARER_TOKEN_BEDROCK: ${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
     steps:
       - uses: actions/checkout@v4
       - name: Copy compose files to the server
@@ -94,11 +95,18 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: DEPLOY_DIR,IMAGE
+          envs: DEPLOY_DIR,IMAGE,AWS_BEARER_TOKEN_BEDROCK
           script: |
             set -e
             cd "$DEPLOY_DIR"
             test -f .env || { echo "Missing $DEPLOY_DIR/.env (copy .env.example and fill it in)"; exit 1; }
+            chmod 600 .env
+            # Secrets kept in GitHub are written into .env so they never live in the repo.
+            if [ -n "$AWS_BEARER_TOKEN_BEDROCK" ]; then
+              grep -v '^AWS_BEARER_TOKEN_BEDROCK=' .env > .env.new || true
+              printf 'AWS_BEARER_TOKEN_BEDROCK=%s\n' "$AWS_BEARER_TOKEN_BEDROCK" >> .env.new
+              chmod 600 .env.new && mv .env.new .env
+            fi
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
             # Remember the deployed image so a manual `docker compose up` uses it too.
             if grep -q '^APP_IMAGE=' .env; then sed -i "s|^APP_IMAGE=.*|APP_IMAGE=$IMAGE|" .env; else echo "APP_IMAGE=$IMAGE" >> .env; fi
