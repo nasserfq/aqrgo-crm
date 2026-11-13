@@ -50,6 +50,7 @@ impl Modules {
 
 const LOGO_SVG: &str = include_str!("../../common/static/logo.svg");
 const LOGO_PNG: &[u8] = include_bytes!("../../common/static/logo.png");
+const HTMX: &str = include_str!("../../common/static/htmx.min.js");
 
 fn asset(content_type: &'static str, body: impl IntoResponse) -> impl IntoResponse {
     (
@@ -72,6 +73,17 @@ async fn css() -> impl IntoResponse {
     )
 }
 
+async fn htmx() -> impl IntoResponse {
+    (
+        [
+            (header::CONTENT_TYPE, "text/javascript; charset=utf-8"),
+            // The version is in the URL, so it never changes under that name.
+            (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+        ],
+        HTMX,
+    )
+}
+
 /// The full HTTP app.
 pub fn router(m: &Modules) -> Router {
     let protected = listings::web::router(m.listings.clone())
@@ -84,6 +96,7 @@ pub fn router(m: &Modules) -> Router {
     let mut app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/static/app.css", get(css))
+        .route("/static/htmx-2.0.4.js", get(htmx))
         .route(
             "/static/logo.svg",
             get(|| async { asset("image/svg+xml", LOGO_SVG) }),

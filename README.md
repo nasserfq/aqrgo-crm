@@ -33,6 +33,14 @@ Tests need a Postgres where the user can create databases:
 TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5433/postgres cargo test --workspace
 ```
 
+End-to-end tests drive the real app in Chromium at desktop and phone sizes (sign-in, add/search/filter/edit/export/delete, privacy between users). They need an empty database and run in CI before every deploy:
+
+```bash
+cargo build -p app
+cd e2e && npm ci && npx playwright install chromium
+DATABASE_URL=postgres://postgres:postgres@localhost:5433/e2e npx playwright test
+```
+
 ## Deploy (GitHub Actions → your server)
 
 Every push to `main` runs the tests, builds the Docker image on GitHub, pushes it to GitHub's container registry, then connects to the server over SSH and restarts it. Nothing is compiled on the server.

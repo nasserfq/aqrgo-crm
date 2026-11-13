@@ -204,3 +204,17 @@ async fn stylesheet_url_changes_with_its_content_so_phones_never_keep_old_styles
         "versioned stylesheet link"
     );
 }
+
+#[tokio::test]
+async fn htmx_is_served_from_our_own_domain_so_live_search_never_depends_on_a_cdn() {
+    let (app, _) = app().await;
+    let (_, _, _, page) = call(&app, get("/", None)).await;
+    assert!(
+        page.contains(r#"src="/static/htmx-2.0.4.js""#),
+        "self-hosted htmx"
+    );
+    assert!(!page.contains("unpkg.com"), "no third-party script host");
+    let (status, _, _, js) = call(&app, get("/static/htmx-2.0.4.js", None)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(js.contains("htmx"), "serves the library");
+}
