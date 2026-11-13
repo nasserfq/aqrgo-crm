@@ -11,6 +11,9 @@ pub struct Email {
     pub to: String,
     pub subject: String,
     pub text: String,
+    /// Optional HTML body; mail clients show it, falling back to `text`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub html: Option<String>,
 }
 
 /// Queues emails. Cheap to clone.
@@ -52,7 +55,12 @@ pub fn register(worker: jobs::Worker, sender: SesSender) -> jobs::Worker {
             let utf8 = |s: &str| Content::builder().data(s).charset("UTF-8").build().map_err(|e| e.to_string());
             let message = Message::builder()
                 .subject(utf8(&email.subject)?)
-                .body(Body::builder().text(utf8(&email.text)?).build())
+                .body(
+                    Body::builder()
+                        .text(utf8(&email.text)?)
+                        .set_html(email.html.as_deref().map(utf8).transpose()?)
+                        .build(),
+                )
                 .build();
             client
                 .send_email()
@@ -65,4 +73,16 @@ pub fn register(worker: jobs::Worker, sender: SesSender) -> jobs::Worker {
                 .map_err(|e| format!("SES send failed: {}", aws_sdk_sesv2::error::DisplayErrorContext(e)))
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn jobs_queued_before_html_existed_still_load() {
+        let old = serde_json::json!({ "to": "a@b.c", "subject": "s", "text": "t" });
+        let email: Email = serde_json::from_value(old).unwrap();
+        assert_eq!(email.html, None);
+    }
 }

@@ -1,11 +1,14 @@
+<div class="topbar-wrap">
 <header class="topbar">
-  <a class="brand" href="/">AQRGO <span>CRM</span></a>
+  <a class="brand" href="/">{% include "logo_mark.html" %}AQRGO <span>CRM</span></a>
   <nav>
     <a href="/" {% if nav == common::ui::Nav::Listings %}class="active"{% endif %}>العروض</a>
-    <a href="/account" {% if nav == common::ui::Nav::Account %}class="active"{% endif %}>حسابي وتيليجرام</a>
+    <a href="/account" {% if nav == common::ui::Nav::Account %}class="active"{% endif %}>حسابي<span class="nav-long"> وتيليجرام</span></a>
   </nav>
   <div class="who">
     <span>{{ user.name }}</span>
     <form method="post" action="/auth/logout"><button class="link">خروج</button></form>
   </div>
 </header>
+<div class="pixel-band" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+</div>

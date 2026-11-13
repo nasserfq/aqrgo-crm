@@ -9,7 +9,9 @@
 mod service;
 pub mod web;
 
-pub use service::{AuthConfig, AuthError, AuthService, CodeMailer, MailerCodeSender};
+pub use service::{
+    login_code_email, AuthConfig, AuthError, AuthService, CodeMailer, MailerCodeSender,
+};
 
 pub const SCHEMA: &str = "auth";
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");

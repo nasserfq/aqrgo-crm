@@ -1,9 +1,17 @@
 {% extends "base.html" %}
 {% block title %}تسجيل الدخول{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block aside %}
+<aside class="hero" aria-hidden="true">
+  <div class="pixels">{% for _ in 0..60 %}<i></i>{% endfor %}</div>
+  <h2>الصق العرض.<br><em>والجدول يرتب نفسه.</em></h2>
+  <p>أرسل رسالة الوسيط كما هي إلى بوت تيليجرام، والذكاء الاصطناعي يوزعها على أعمدة جدولك.</p>
+</aside>
+{% endblock %}
 {% block content %}
-<section class="auth-card card">
-  <div class="auth-brand">AQRGO <span>CRM</span></div>
-  <p class="muted">جدول العروض العقارية، يُعبأ من الموقع أو من تيليجرام</p>
+<section class="auth-card">
+  <div class="auth-brand">{% include "logo_mark.html" %}AQRGO <span>CRM</span></div>
+  <p class="muted lede">جدول العروض العقارية، يُعبأ من الموقع أو من تيليجرام</p>
   {% if let Some(err) = error %}<p class="error">{{ err }}</p>{% endif %}
 
   {% if step == Step::Email %}
