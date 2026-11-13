@@ -21,3 +21,7 @@ The default five labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready
 ### Domain docs
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
+## TypeSafe (Jev)
+
+Use the `typesafe-ai` skill (plugin `typesafe@typesafe-ai`, enabled in `.claude/settings.json`) for any work on Jev decisions in lead extraction. Bedrock extracts the row fields; Jev answers typed judgments (is it a lead, offer type, status, duplicate) and code makes the decision. Leads are Arabic, so test questions on real Arabic messages before relying on them.
