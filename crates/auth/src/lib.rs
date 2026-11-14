@@ -2,10 +2,12 @@
 //! and linking one Telegram account to each user.
 //!
 //! Public API: [`AuthService`], [`AuthConfig`], [`AuthError`], [`CodeMailer`],
-//! and [`web`] (login pages, Google OAuth, the `require_user` middleware).
+//! [`web`] (login pages, Google OAuth, the `require_user` middleware), and
+//! [`api`] (JSON sign-in with bearer tokens for the mobile apps).
 //! Owns the `auth` Postgres schema. Other modules only ever see
 //! `common::CurrentUser`.
 
+pub mod api;
 mod service;
 pub mod web;
 

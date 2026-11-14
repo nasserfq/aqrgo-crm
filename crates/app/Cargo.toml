@@ -33,3 +33,4 @@ testkit.workspace = true
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 async-trait.workspace = true
+serde_json.workspace = true

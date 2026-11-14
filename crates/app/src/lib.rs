@@ -93,6 +93,14 @@ pub fn router(m: &Modules) -> Router {
             auth::web::require_user,
         ));
 
+    // JSON API for the iOS and Android apps (bearer tokens, no cookies).
+    let api = listings::api::router(m.listings.clone())
+        .merge(auth::api::account_router())
+        .layer(middleware::from_fn_with_state(
+            m.auth_web.clone(),
+            auth::api::require_token,
+        ));
+
     let mut app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/static/app.css", get(css))
@@ -110,7 +118,9 @@ pub fn router(m: &Modules) -> Router {
             get(|| async { asset("image/png", LOGO_PNG) }),
         )
         .merge(auth::web::public_router(m.auth_web.clone()))
-        .merge(protected);
+        .merge(protected)
+        .merge(auth::api::public_router(m.auth_web.clone()))
+        .merge(api);
 
     if let Some(secret) = &m.telegram_secret {
         app = app.merge(telegram::webhook::router(m.jobs.clone(), secret.clone()));
