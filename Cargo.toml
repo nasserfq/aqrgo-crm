@@ -34,6 +34,8 @@ aws-smithy-types = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 rand = "0.8"
 async-trait = "0.1"
+# Error reporting to Sentry (errors, panics, error-level logs). Off when SENTRY_DSN is empty.
+sentry = { version = "0.49", default-features = false, features = ["backtrace", "contexts", "panic", "debug-images", "reqwest", "rustls", "tracing", "tower-axum-matched-path"] }
 common = { path = "crates/common" }
 jobs = { path = "crates/jobs" }
 mailer = { path = "crates/mailer" }

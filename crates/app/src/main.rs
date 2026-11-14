@@ -3,17 +3,29 @@ use std::{sync::Arc, time::Duration};
 use anyhow::Context;
 use app::{Config, Modules};
 use sqlx::postgres::PgPoolOptions;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,sqlx=warn".into()),
-        )
+// Sentry starts before the async runtime so it sees every thread, then the
+// guard lives until the program ends and flushes queued errors on the way out.
+fn main() -> anyhow::Result<()> {
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,sqlx=warn".into()))
+        .with(tracing_subscriber::fmt::layer())
+        .with(app::telemetry::tracing_layer())
         .init();
 
     let cfg = Config::from_env()?;
+    let _sentry = app::telemetry::init(&cfg);
+    if _sentry.is_some() {
+        tracing::info!("Sentry error reporting on");
+    }
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?
+        .block_on(run(cfg))
+}
+
+async fn run(cfg: Config) -> anyhow::Result<()> {
     let pool = PgPoolOptions::new()
         .max_connections(10)
         .acquire_timeout(Duration::from_secs(10))
