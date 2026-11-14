@@ -35,7 +35,7 @@ Columns, right to left, in this order (from the Word table), plus the columns re
 ## Architecture
 
 - Rust + Axum modular monolith (Cargo workspace). Modules: `listings`, `auth`, `telegram`, `ai`, `jobs`, `mailer`, `common`, wired by `app`. Modules talk through public APIs and each owns its own Postgres schema and migrations.
-- Server-rendered pages (Askama + a little htmx).
+- Server-rendered pages (Askama + a little htmx), plus a JSON API under `/api/v1` with bearer tokens for the iOS and Android apps (see `docs/api.md`).
 - PostgreSQL, self-hosted next to the app (not Supabase), with daily backups.
 - Background jobs: Postgres-backed queue with retries.
 - No Redis for now (Postgres covers current needs).
