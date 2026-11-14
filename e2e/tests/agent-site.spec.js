@@ -24,7 +24,9 @@ test('an agent publishes a site that shows their available listings, without pri
 
   // A visitor who is not signed in.
   const visitor = await (await browser.newContext()).newPage();
+  // Old /s/<name> links move to the site's own address, <name>.<domain>.
   await visitor.goto(`/s/${slug}`);
+  await expect(visitor).toHaveURL(new RegExp(`^http://${slug}\\.localhost:\\d+/$`));
   await expect(visitor.getByRole('heading', { level: 1 })).toHaveText('نبيع ونؤجر في شمال الرياض');
   await expect(visitor.getByText('إدارة الأملاك')).toBeVisible();
   await expect(visitor.getByRole('heading', { name: 'حي الملقا' })).toBeVisible();

@@ -192,6 +192,6 @@ jobs:
               --target aqrgo-crm-app:8080 --tls \
               --tls-on-demand-url "http://aqrgo-crm-app:8080/sites/tls-check" \
               --health-check-path /healthz; then
-              echo "::warning::Agent sites at *.$APP_DOMAIN are not routed (kamal-proxy refused the catch-all service). They still work at https://$APP_DOMAIN/s/<name>."
+              echo "::warning::Agent sites at *.$APP_DOMAIN are not routed (kamal-proxy refused the catch-all service). Agent sites will not open until this is fixed on the server."
             fi
             echo "Deployed $IMAGE"

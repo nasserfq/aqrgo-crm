@@ -38,7 +38,7 @@ Agreed with Nasser on 2026-11-14.
 
 - Each user can publish a one-page Arabic site (company profile): tagline, about, services, Fal licence number, phone and WhatsApp buttons, email, office address and map link, a main colour and a logo (PNG, JPG or WebP up to 512 KB).
 - Their available listings appear on it automatically, showing only offer type, location, area, price, rooms, bathrooms, floors and frontages. Never buyer, seller, broker, plot number, income or notes. Any listing can be hidden.
-- Served at `<name>.aqrgo.com` (wildcard DNS on Cloudflare) and `aqrgo.com/s/<name>`. HTTPS per site on first visit through kamal-proxy on-demand TLS, approved only for published sites. Custom domains and property photos (Cloudflare R2) come later. Intended for the paid plan once billing exists.
+- Served only at `<name>.aqrgo.com` (wildcard DNS on Cloudflare); `aqrgo.com/s/<name>` redirects there. HTTPS per site on first visit through kamal-proxy on-demand TLS, approved only for published sites. Custom domains and property photos (Cloudflare R2) come later. Intended for the paid plan once billing exists.
 
 ## Architecture
 

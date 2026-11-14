@@ -26,8 +26,10 @@ pub struct SitesWeb {
     service: SitesService,
     /// Sites live one level under this domain, e.g. `aqrgo.com`.
     base_domain: String,
-    /// `https` in production, so the settings page links the right address.
+    /// `https://` in production; links to a site are `{scheme}{slug}.{host}`.
     scheme: String,
+    /// The CRM's host with any port, without `www.` (e.g. `aqrgo.com`).
+    host: String,
 }
 
 impl SitesWeb {
@@ -36,13 +38,19 @@ impl SitesWeb {
         let (scheme, rest) = public_url
             .split_once("://")
             .unwrap_or(("https", public_url));
-        let host = rest.split(['/', ':']).next().unwrap_or("").to_lowercase();
-        let base_domain = host.strip_prefix("www.").unwrap_or(&host).to_string();
+        let host = rest.split('/').next().unwrap_or("").to_lowercase();
+        let host = host.strip_prefix("www.").unwrap_or(&host).to_string();
         Self {
             service,
-            base_domain,
-            scheme: scheme.to_string(),
+            base_domain: host.split(':').next().unwrap_or("").to_string(),
+            scheme: format!("{scheme}://"),
+            host,
         }
+    }
+
+    /// A site's one public address, e.g. `https://alnukhba.aqrgo.com`.
+    pub fn site_url(&self, slug: &str) -> String {
+        format!("{}{}.{}", self.scheme, slug, self.host)
     }
 }
 
@@ -59,12 +67,12 @@ pub fn settings_router(state: SitesWeb) -> Router {
         .with_state(state)
 }
 
-/// Public pages on the CRM's own address, plus the certificate check the
-/// proxy calls before it asks Let's Encrypt for `<slug>.<base domain>`.
+/// On the CRM's own address: old `/s/<slug>` links move to the site's own
+/// address, plus the certificate check the proxy calls before it asks
+/// Let's Encrypt for `<slug>.<base domain>`.
 pub fn public_router(state: SitesWeb) -> Router {
     Router::new()
-        .route("/s/{slug}", get(site_by_path))
-        .route("/s/{slug}/logo", get(logo_by_path))
+        .route("/s/{slug}", get(to_site_address))
         .route("/sites/tls-check", get(tls_check))
         .with_state(state)
 }
@@ -81,7 +89,7 @@ pub async fn subdomain(State(s): State<SitesWeb>, req: Request, next: Next) -> R
         return next.run(req).await;
     };
     match req.uri().path() {
-        "/" => render_site(&s, &slug, "/logo".into()).await,
+        "/" => render_site(&s, &slug).await,
         "/logo" => serve_logo(&s, &slug).await,
         _ => not_found(),
     }
@@ -94,7 +102,6 @@ pub async fn subdomain(State(s): State<SitesWeb>, req: Request, next: Next) -> R
 struct SitePage {
     site: Site,
     listings: Vec<PublicListing>,
-    logo_url: String,
 }
 
 impl SitePage {
@@ -103,22 +110,18 @@ impl SitePage {
     }
 }
 
-async fn site_by_path(State(s): State<SitesWeb>, Path(slug): Path<String>) -> Response {
-    let logo = format!("/s/{slug}/logo");
-    render_site(&s, &slug, logo).await
+async fn to_site_address(State(s): State<SitesWeb>, Path(slug): Path<String>) -> Response {
+    let host = format!("{slug}.{}", s.base_domain);
+    match s.service.slug_for_host(&host, &s.base_domain).await {
+        Ok(Some(slug)) => Redirect::permanent(&format!("{}/", s.site_url(&slug))).into_response(),
+        Ok(None) => not_found(),
+        Err(e) => server_error(e),
+    }
 }
 
-async fn logo_by_path(State(s): State<SitesWeb>, Path(slug): Path<String>) -> Response {
-    serve_logo(&s, &slug).await
-}
-
-async fn render_site(s: &SitesWeb, slug: &str, logo_url: String) -> Response {
+async fn render_site(s: &SitesWeb, slug: &str) -> Response {
     match s.service.public(slug).await {
-        Ok(Some(PublicSite { site, listings })) => html(&SitePage {
-            site,
-            listings,
-            logo_url,
-        }),
+        Ok(Some(PublicSite { site, listings })) => html(&SitePage { site, listings }),
         Ok(None) => not_found(),
         Err(e) => server_error(e),
     }
@@ -165,7 +168,6 @@ struct SettingsPage {
     has_logo: bool,
     choices: Vec<ListingChoice>,
     site_url: String,
-    path_url: String,
     base_domain: String,
     saved: bool,
     error: Option<String>,
@@ -205,8 +207,7 @@ impl SettingsPage {
         let slug = site.map(|x| x.slug.clone()).unwrap_or_default();
         Ok(Self {
             nav: Nav::Site,
-            site_url: format!("{}://{}.{}", s.scheme, slug, s.base_domain),
-            path_url: format!("/s/{slug}"),
+            site_url: s.site_url(&slug),
             base_domain: s.base_domain.clone(),
             exists: site.is_some(),
             has_logo: site.is_some_and(|x| x.has_logo),

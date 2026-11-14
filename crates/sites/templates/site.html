@@ -7,7 +7,7 @@
 <meta name="description" content="{% if !site.about.is_empty() %}{{ site.about }}{% else %}{{ site.company_name }}{% endif %}">
 <meta property="og:title" content="{{ site.company_name }}">
 <meta property="og:type" content="website">
-{% if site.has_logo %}<link rel="icon" href="{{ logo_url }}">{% endif %}
+{% if site.has_logo %}<link rel="icon" href="/logo">{% endif %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
@@ -120,7 +120,7 @@ footer a { color: var(--muted); }
 <header class="top">
   <div class="wrap">
     <a class="brand" href="#">
-      {% if site.has_logo %}<img src="{{ logo_url }}" alt="">{% else %}<span class="initial">{{ self.initials() }}</span>{% endif %}
+      {% if site.has_logo %}<img src="/logo" alt="">{% else %}<span class="initial">{{ self.initials() }}</span>{% endif %}
       {{ site.company_name }}
     </a>
     <nav>

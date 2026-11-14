@@ -258,9 +258,14 @@ async fn an_agent_publishes_a_site_that_anyone_can_open() {
     assert_eq!(status, StatusCode::OK);
     assert!(page.contains("مكتب النخبة العقاري") && page.contains("alnukhba"));
     assert!(page.contains("حي الملقا"), "listings to show or hide");
+    assert!(
+        page.contains(r#"href="http://alnukhba.localhost""#),
+        "the site's own address"
+    );
+    assert!(!page.contains("/s/alnukhba"), "no path address");
 
-    for req in [get("/s/alnukhba", None), on_host("alnukhba.localhost", "/")] {
-        let (status, _, _, site) = call(&app, req).await;
+    {
+        let (status, _, _, site) = call(&app, on_host("alnukhba.localhost", "/")).await;
         assert_eq!(status, StatusCode::OK);
         assert!(site.contains("dir=\"rtl\""));
         assert!(site.contains("مكتب النخبة العقاري") && site.contains("إدارة الأملاك"));
@@ -279,14 +284,23 @@ async fn an_agent_publishes_a_site_that_anyone_can_open() {
 async fn unknown_or_unpublished_sites_are_not_found() {
     let (app, inbox) = app().await;
     let me = agent_with_a_site(&app, &inbox).await;
-    let (status, _, _, _) = call(&app, get("/s/nobody", None)).await;
-    assert_eq!(status, StatusCode::NOT_FOUND);
     let (status, _, _, _) = call(&app, on_host("nobody.localhost", "/")).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 
     let off = format!("slug=alnukhba&company_name={}", enc("مكتب النخبة العقاري"));
     call(&app, form("/site", &off, Some(&me))).await;
-    let (status, _, _, _) = call(&app, get("/s/alnukhba", None)).await;
+    let (status, _, _, _) = call(&app, on_host("alnukhba.localhost", "/")).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn old_path_links_move_to_the_sites_own_address() {
+    let (app, inbox) = app().await;
+    agent_with_a_site(&app, &inbox).await;
+    let (status, _, location, _) = call(&app, get("/s/alnukhba", None)).await;
+    assert_eq!(status, StatusCode::PERMANENT_REDIRECT);
+    assert_eq!(location.as_deref(), Some("http://alnukhba.localhost/"));
+    let (status, _, _, _) = call(&app, get("/s/nobody", None)).await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
@@ -333,18 +347,17 @@ async fn an_agent_uploads_a_logo_for_their_site() {
     assert_eq!(status, StatusCode::SEE_OTHER);
     assert_eq!(location.as_deref(), Some("/site?saved=1"));
 
-    for req in [
-        get("/s/alnukhba/logo", None),
-        on_host("alnukhba.localhost", "/logo"),
-    ] {
-        let res = app.clone().oneshot(req).await.unwrap();
+    {
+        let res = app
+            .clone()
+            .oneshot(on_host("alnukhba.localhost", "/logo"))
+            .await
+            .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
         assert_eq!(res.headers()[header::CONTENT_TYPE], "image/png");
         let bytes = res.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(&bytes[..], png);
     }
-    let (_, _, _, site) = call(&app, get("/s/alnukhba", None)).await;
-    assert!(site.contains("/s/alnukhba/logo"));
     let (_, _, _, site) = call(&app, on_host("alnukhba.localhost", "/")).await;
     assert!(site.contains("src=\"/logo"));
     let res = app
