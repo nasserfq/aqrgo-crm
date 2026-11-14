@@ -9,7 +9,7 @@ mod model;
 mod service;
 pub mod web;
 
-pub use model::{PublicListing, PublicSite, Site, SiteInput, DEFAULT_ACCENT};
+pub use model::{Logo, PublicListing, PublicSite, Site, SiteInput, DEFAULT_ACCENT};
 pub use service::{SitesError, SitesService};
 
 pub const SCHEMA: &str = "sites";

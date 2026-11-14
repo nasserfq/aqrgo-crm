@@ -7,7 +7,7 @@
 <meta name="description" content="{% if !site.about.is_empty() %}{{ site.about }}{% else %}{{ site.company_name }}{% endif %}">
 <meta property="og:title" content="{{ site.company_name }}">
 <meta property="og:type" content="website">
-{% if site.has_logo %}<meta property="og:image" content="{{ logo_url }}"><link rel="icon" href="{{ logo_url }}">{% endif %}
+{% if site.has_logo %}<link rel="icon" href="{{ logo_url }}">{% endif %}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
@@ -160,7 +160,7 @@ footer a { color: var(--muted); }
     <h2>خدماتنا</h2>
     <p class="sub">ما نقدمه لعملائنا من بداية الطلب حتى إتمام الصفقة.</p>
     <ul class="services">
-      {% for s in site.services() %}<li>{{ s }}</li>{% endfor %}
+      {% for service in site.services() %}<li>{{ service }}</li>{% endfor %}
     </ul>
   </div>
 </section>

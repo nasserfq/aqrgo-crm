@@ -95,7 +95,7 @@
   <h2>الشعار</h2>
   {% if exists %}
   <form method="post" action="/site/logo" enctype="multipart/form-data" class="logo-form">
-    {% if has_logo && input.published %}<img src="{{ path_url }}/logo" alt="الشعار" class="logo-preview">{% endif %}
+    {% if has_logo %}<img src="/site/logo" alt="الشعار" class="logo-preview">{% endif %}
     <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
     <button class="btn" type="submit">رفع الشعار</button>
     <small class="hint">PNG أو JPG أو WebP، حتى ٥١٢ كيلوبايت.</small>

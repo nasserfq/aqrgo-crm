@@ -214,6 +214,16 @@ impl SiteInput {
         if !self.map_url.starts_with("https://") {
             self.map_url.clear();
         }
+        let plain_email = self.email.split_once('@').is_some_and(|(user, domain)| {
+            !user.is_empty()
+                && domain.contains('.')
+                && !self
+                    .email
+                    .contains(|c: char| c.is_whitespace() || "?&#/:,;<>\"'".contains(c))
+        });
+        if !plain_email {
+            self.email.clear();
+        }
         if self.published && self.company_name.is_empty() {
             return Err("اكتب اسم المكتب قبل نشر الموقع");
         }
@@ -232,6 +242,19 @@ pub fn logo_type(bytes: &[u8]) -> Option<&'static str> {
         Some("image/webp")
     } else {
         None
+    }
+}
+
+/// A stored logo: the picture and its content type.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Logo(pub Vec<u8>, pub String);
+
+impl Logo {
+    pub(crate) fn from_row(row: Option<(Option<Vec<u8>>, Option<String>)>) -> Option<Self> {
+        match row {
+            Some((Some(bytes), Some(content_type))) => Some(Logo(bytes, content_type)),
+            _ => None,
+        }
     }
 }
 

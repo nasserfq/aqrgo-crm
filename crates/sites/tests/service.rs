@@ -219,7 +219,7 @@ async fn the_logo_must_be_a_small_picture() {
     ));
 
     svc.set_logo(1, PNG.to_vec()).await.unwrap();
-    let (bytes, content_type) = svc.logo("alnukhba").await.unwrap().unwrap();
+    let sites::Logo(bytes, content_type) = svc.logo("alnukhba").await.unwrap().unwrap();
     assert_eq!(
         (bytes.as_slice(), content_type.as_str()),
         (PNG, "image/png")
@@ -271,4 +271,53 @@ async fn only_published_site_hosts_are_approved_for_certificates() {
             "{other}"
         );
     }
+}
+
+#[tokio::test]
+async fn an_email_that_could_rewrite_the_mail_link_is_dropped() {
+    let (svc, _) = services().await;
+    let site = svc
+        .save(
+            1,
+            SiteInput {
+                email: "a@b.sa?body=hi".into(),
+                ..office("alnukhba")
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(site.email, "");
+    let site = svc
+        .save(
+            1,
+            SiteInput {
+                email: " info@alnukhba.sa ".into(),
+                ..office("alnukhba")
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(site.email, "info@alnukhba.sa");
+}
+
+#[tokio::test]
+async fn the_owner_sees_their_logo_before_publishing() {
+    let (svc, _) = services().await;
+    svc.save(
+        1,
+        SiteInput {
+            published: false,
+            ..office("alnukhba")
+        },
+    )
+    .await
+    .unwrap();
+    svc.set_logo(1, PNG.to_vec()).await.unwrap();
+    assert!(
+        svc.logo("alnukhba").await.unwrap().is_none(),
+        "not public yet"
+    );
+    let sites::Logo(bytes, _) = svc.own_logo(1).await.unwrap().unwrap();
+    assert_eq!(bytes, PNG);
+    assert!(svc.own_logo(2).await.unwrap().is_none());
 }

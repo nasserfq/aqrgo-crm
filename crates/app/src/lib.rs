@@ -44,7 +44,6 @@ impl Modules {
         let listings = listings::ListingsService::new(pool.clone());
         let sites = sites::web::SitesWeb::new(
             sites::SitesService::new(pool.clone(), listings.clone()),
-            listings.clone(),
             &web_config.public_url,
         );
         Self {

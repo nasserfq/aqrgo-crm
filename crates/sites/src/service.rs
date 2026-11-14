@@ -1,7 +1,7 @@
-use listings::{Filter, ListingsService, Status};
+use listings::{Filter, Listing, ListingsService, Status};
 use sqlx::PgPool;
 
-use crate::model::{logo_type, PublicListing, PublicSite, Site, SiteInput, MAX_LOGO_BYTES};
+use crate::model::{logo_type, Logo, PublicListing, PublicSite, Site, SiteInput, MAX_LOGO_BYTES};
 
 #[derive(Debug, thiserror::Error)]
 pub enum SitesError {
@@ -89,6 +89,15 @@ impl SitesService {
             .await?)
     }
 
+    /// The owner's available listings: the ones a site can show.
+    pub async fn available_listings(&self, owner: i64) -> Result<Vec<Listing>, SitesError> {
+        let filter = Filter {
+            q: None,
+            status: Some(Status::Available),
+        };
+        Ok(self.listings.list(owner, &filter).await?)
+    }
+
     /// Listing ids the owner keeps off their site, in ascending order.
     pub async fn hidden_listings(&self, owner: i64) -> Result<Vec<i64>, SitesError> {
         Ok(sqlx::query_scalar(
@@ -109,14 +118,9 @@ impl SitesService {
         else {
             return Ok(None);
         };
-        let filter = Filter {
-            q: None,
-            status: Some(Status::Available),
-        };
         let hidden = self.hidden_listings(site.owner_id).await?;
         let listings = self
-            .listings
-            .list(site.owner_id, &filter)
+            .available_listings(site.owner_id)
             .await?
             .iter()
             .filter(|l| !hidden.contains(&l.id))
@@ -147,17 +151,23 @@ impl SitesService {
         Ok(())
     }
 
-    /// The logo of a published site and its content type.
-    pub async fn logo(&self, slug: &str) -> Result<Option<(Vec<u8>, String)>, SitesError> {
-        let row: Option<(Option<Vec<u8>>, Option<String>)> =
+    /// The logo of a published site.
+    pub async fn logo(&self, slug: &str) -> Result<Option<Logo>, SitesError> {
+        let row =
             sqlx::query_as("SELECT logo, logo_type FROM sites.sites WHERE slug = $1 AND published")
                 .bind(slug)
                 .fetch_optional(&self.pool)
                 .await?;
-        Ok(match row {
-            Some((Some(bytes), Some(t))) => Some((bytes, t)),
-            _ => None,
-        })
+        Ok(Logo::from_row(row))
+    }
+
+    /// The owner's own logo, published or not (for the settings preview).
+    pub async fn own_logo(&self, owner: i64) -> Result<Option<Logo>, SitesError> {
+        let row = sqlx::query_as("SELECT logo, logo_type FROM sites.sites WHERE owner_id = $1")
+            .bind(owner)
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(Logo::from_row(row))
     }
 
     /// The published site served at `host` (`<slug>.<base_domain>`, any port).

@@ -10,22 +10,20 @@ use axum::{
     http::{header, HeaderMap, StatusCode},
     middleware::Next,
     response::{Html, IntoResponse, Redirect, Response},
-    routing::{get, post},
+    routing::get,
     Extension, Form, Router,
 };
 use common::{ui::Nav, CurrentUser};
-use listings::{Filter, Listing, ListingsService, Status};
 use serde::Deserialize;
 
 use crate::{
     model::{slug_in_host, MAX_LOGO_BYTES},
-    PublicListing, PublicSite, Site, SiteInput, SitesError, SitesService, DEFAULT_ACCENT,
+    Logo, PublicListing, PublicSite, Site, SiteInput, SitesError, SitesService, DEFAULT_ACCENT,
 };
 
 #[derive(Clone)]
 pub struct SitesWeb {
-    pub service: SitesService,
-    listings: ListingsService,
+    service: SitesService,
     /// Sites live one level under this domain, e.g. `aqrgo.com`.
     base_domain: String,
     /// `https` in production, so the settings page links the right address.
@@ -34,7 +32,7 @@ pub struct SitesWeb {
 
 impl SitesWeb {
     /// `public_url` is the CRM's own address, e.g. `https://aqrgo.com`.
-    pub fn new(service: SitesService, listings: ListingsService, public_url: &str) -> Self {
+    pub fn new(service: SitesService, public_url: &str) -> Self {
         let (scheme, rest) = public_url
             .split_once("://")
             .unwrap_or(("https", public_url));
@@ -42,7 +40,6 @@ impl SitesWeb {
         let base_domain = host.strip_prefix("www.").unwrap_or(&host).to_string();
         Self {
             service,
-            listings,
             base_domain,
             scheme: scheme.to_string(),
         }
@@ -55,7 +52,9 @@ pub fn settings_router(state: SitesWeb) -> Router {
         .route("/site", get(settings_page).post(save))
         .route(
             "/site/logo",
-            post(upload_logo).layer(DefaultBodyLimit::max(MAX_LOGO_BYTES + 64 * 1024)),
+            get(own_logo)
+                .post(upload_logo)
+                .layer(DefaultBodyLimit::max(MAX_LOGO_BYTES + 64 * 1024)),
         )
         .with_state(state)
 }
@@ -127,15 +126,7 @@ async fn render_site(s: &SitesWeb, slug: &str, logo_url: String) -> Response {
 
 async fn serve_logo(s: &SitesWeb, slug: &str) -> Response {
     match s.service.logo(slug).await {
-        Ok(Some((bytes, content_type))) => (
-            [
-                (header::CONTENT_TYPE, content_type),
-                (header::CACHE_CONTROL, "public, max-age=300".to_string()),
-                (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
-            ],
-            bytes,
-        )
-            .into_response(),
+        Ok(Some(logo)) => logo_response(logo),
         Ok(None) => not_found(),
         Err(e) => server_error(e),
     }
@@ -185,14 +176,6 @@ struct SettingsQuery {
     saved: Option<String>,
 }
 
-async fn available(s: &SitesWeb, owner: i64) -> Result<Vec<Listing>, SitesError> {
-    let filter = Filter {
-        q: None,
-        status: Some(Status::Available),
-    };
-    Ok(s.listings.list(owner, &filter).await?)
-}
-
 impl SettingsPage {
     async fn build(
         s: &SitesWeb,
@@ -203,7 +186,9 @@ impl SettingsPage {
         saved: bool,
     ) -> Result<Self, SitesError> {
         let hidden = input.hidden_listings.clone();
-        let choices = available(s, user.id)
+        let choices = s
+            .service
+            .available_listings(user.id)
             .await?
             .into_iter()
             .map(|l| ListingChoice {
@@ -321,53 +306,95 @@ async fn save(
     let input = form.into_input(previously_hidden);
     match s.service.save(user.id, input.clone()).await {
         Ok(_) => Redirect::to("/site?saved=1").into_response(),
-        Err(SitesError::Invalid(msg)) => {
-            let site = s.service.get(user.id).await.ok().flatten();
-            match SettingsPage::build(&s, user, input, site.as_ref(), Some(msg.into()), false).await
-            {
-                Ok(page) => (StatusCode::UNPROCESSABLE_ENTITY, html(&page)).into_response(),
-                Err(e) => server_error(e),
-            }
-        }
+        Err(SitesError::Invalid(msg)) => invalid(&s, user, Some(input), msg).await,
         Err(e) => server_error(e),
     }
 }
+
+const LOGO_TOO_BIG: &str = "الشعار أكبر من ٥١٢ كيلوبايت";
 
 async fn upload_logo(
     State(s): State<SitesWeb>,
     Extension(user): Extension<CurrentUser>,
     mut multipart: Multipart,
 ) -> Response {
-    let mut bytes = None;
-    while let Ok(Some(field)) = multipart.next_field().await {
-        if field.name() == Some("logo") {
-            bytes = field.bytes().await.ok().map(|b| b.to_vec());
-            break;
+    let mut upload = Err(SitesError::Invalid("اختر صورة الشعار أولاً"));
+    loop {
+        match multipart.next_field().await {
+            Ok(Some(field)) if field.name() == Some("logo") => {
+                // Reading fails when the body is over the route's size limit.
+                match field.bytes().await {
+                    Ok(b) if !b.is_empty() => upload = Ok(b.to_vec()),
+                    Ok(_) => {}
+                    Err(_) => upload = Err(SitesError::Invalid(LOGO_TOO_BIG)),
+                }
+                break;
+            }
+            Ok(Some(_)) => {}
+            Ok(None) => break,
+            Err(_) => {
+                upload = Err(SitesError::Invalid(LOGO_TOO_BIG));
+                break;
+            }
         }
     }
-    let result = match bytes {
-        Some(b) if !b.is_empty() => s.service.set_logo(user.id, b).await,
-        _ => Err(SitesError::Invalid("اختر صورة الشعار أولاً")),
+    let result = match upload {
+        Ok(bytes) => s.service.set_logo(user.id, bytes).await,
+        Err(e) => Err(e),
     };
     match result {
         Ok(()) => Redirect::to("/site?saved=1").into_response(),
-        Err(SitesError::Invalid(msg)) => {
-            let site = s.service.get(user.id).await.ok().flatten();
-            let input = match &site {
-                Some(x) => x.to_input(s.service.hidden_listings(user.id).await.unwrap_or_default()),
-                None => SiteInput::default(),
-            };
-            match SettingsPage::build(&s, user, input, site.as_ref(), Some(msg.into()), false).await
-            {
-                Ok(page) => (StatusCode::UNPROCESSABLE_ENTITY, html(&page)).into_response(),
-                Err(e) => server_error(e),
-            }
-        }
+        Err(SitesError::Invalid(msg)) => invalid(&s, user, None, msg).await,
+        Err(e) => server_error(e),
+    }
+}
+
+/// The owner's logo for the settings preview, even before publishing.
+async fn own_logo(State(s): State<SitesWeb>, Extension(user): Extension<CurrentUser>) -> Response {
+    match s.service.own_logo(user.id).await {
+        Ok(Some(logo)) => logo_response(logo),
+        Ok(None) => not_found(),
+        Err(e) => server_error(e),
+    }
+}
+
+/// The settings form again with an error. `input` is what was posted, or
+/// `None` to show what is saved.
+async fn invalid(
+    s: &SitesWeb,
+    user: CurrentUser,
+    input: Option<SiteInput>,
+    msg: &'static str,
+) -> Response {
+    let page = async {
+        let site = s.service.get(user.id).await?;
+        let input = match (input, &site) {
+            (Some(i), _) => i,
+            (None, Some(x)) => x.to_input(s.service.hidden_listings(user.id).await?),
+            (None, None) => SiteInput::default(),
+        };
+        SettingsPage::build(s, user, input, site.as_ref(), Some(msg.into()), false).await
+    }
+    .await;
+    match page {
+        Ok(page) => (StatusCode::UNPROCESSABLE_ENTITY, html(&page)).into_response(),
         Err(e) => server_error(e),
     }
 }
 
 // ---------- helpers ----------
+
+fn logo_response(Logo(bytes, content_type): Logo) -> Response {
+    (
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CACHE_CONTROL, "public, max-age=300".to_string()),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".to_string()),
+        ],
+        bytes,
+    )
+        .into_response()
+}
 
 fn html<T: Template>(t: &T) -> Response {
     match common::ui::render(t) {

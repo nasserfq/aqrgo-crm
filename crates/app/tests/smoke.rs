@@ -347,4 +347,27 @@ async fn an_agent_uploads_a_logo_for_their_site() {
     assert!(site.contains("/s/alnukhba/logo"));
     let (_, _, _, site) = call(&app, on_host("alnukhba.localhost", "/")).await;
     assert!(site.contains("src=\"/logo"));
+    let res = app
+        .clone()
+        .oneshot(get("/site/logo", Some(&me)))
+        .await
+        .unwrap();
+    assert_eq!(res.status(), StatusCode::OK, "owner preview");
+}
+
+#[tokio::test]
+async fn a_logo_that_is_too_big_says_so() {
+    let (app, inbox) = app().await;
+    let me = agent_with_a_site(&app, &inbox).await;
+    let mut body = b"--XyZ\r\nContent-Disposition: form-data; name=\"logo\"; filename=\"l.png\"\r\nContent-Type: image/png\r\n\r\n".to_vec();
+    body.extend_from_slice(&vec![0u8; 700 * 1024]);
+    body.extend_from_slice(b"\r\n--XyZ--\r\n");
+    let req = Request::post("/site/logo")
+        .header(header::CONTENT_TYPE, "multipart/form-data; boundary=XyZ")
+        .header(header::COOKIE, &me)
+        .body(Body::from(body))
+        .unwrap();
+    let (status, _, _, page) = call(&app, req).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(page.contains("أكبر من"), "{page}");
 }
