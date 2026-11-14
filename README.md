@@ -12,6 +12,7 @@ See [docs/spec.md](docs/spec.md) for what was agreed.
 | `auth` | schema `auth` | Google sign-in, 6-digit email codes, sessions, Telegram linking |
 | `telegram` | schema `telegram` | Bot conversation, drafts, webhook |
 | `ai` | — | Amazon Bedrock lead extraction, plus optional TypeSafe Jev judgments (is it a lead, الحالة) |
+| `sites` | schema `sites` | Each user's public one-page website (موقعي): company profile, Fal licence, contact buttons and their available listings |
 | `jobs` | schema `jobs` | Postgres job queue + worker |
 | `mailer` | — | Sends email via AWS SES from a job |
 | `common` | — | Shared types, Hijri dates, Arabic digits, layout |
@@ -72,5 +73,7 @@ Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment
 - **AWS**: an IAM user with `ses:SendEmail` and `bedrock:InvokeModel`. Instead of giving that user Bedrock access, you can paste a Bedrock API key into `AWS_BEARER_TOKEN_BEDROCK`. Its region must match `AWS_REGION`. If SES is in another region, set `SES_REGION` (for example `us-east-2`). In SES, verify the `aqrgo.com` domain (it gives you DNS records) and request production access. In Bedrock, enable access to the Amazon Nova model in your region.
 - **Google sign-in** (optional): Google Cloud Console → APIs & Services → Credentials → OAuth client (Web). Redirect URI: `https://aqrgo.com/auth/google/callback`.
 - **Telegram**: create a bot with @BotFather, paste the token, and set `TELEGRAM_WEBHOOK_SECRET` to a random string. The app registers its webhook on startup.
+
+**Agent websites** (موقعي): every user can publish a one-page site at `https://<name>.aqrgo.com` (and `https://aqrgo.com/s/<name>`). It shows only available listings and never buyer, seller, broker, plot number, income or notes. DNS is a wildcard `*.aqrgo.com` A record on Cloudflare (DNS only). Each deploy registers a catch-all kamal-proxy service `aqrgo-sites` with `--tls-on-demand-url`, so a certificate is requested on a site's first visit, only after `/sites/tls-check?host=` confirms it is a published site.
 
 Backups: a daily `pg_dump` lands in `/opt/aqrgo-crm/backups` (14 days kept). Copy them off the server too.

@@ -218,3 +218,133 @@ async fn htmx_is_served_from_our_own_domain_so_live_search_never_depends_on_a_cd
     assert_eq!(status, StatusCode::OK);
     assert!(js.contains("htmx"), "serves the library");
 }
+
+fn on_host(host: &str, uri: &str) -> Request<Body> {
+    Request::get(uri)
+        .header(header::HOST, host)
+        .body(Body::empty())
+        .unwrap()
+}
+
+async fn agent_with_a_site(app: &Router, inbox: &Inbox) -> String {
+    let me = sign_in(app, inbox, "nasser@example.com").await;
+    let row = format!(
+        "offer_type={}&location={}&price=1500000&rooms=5&seller={}&buyer={}&details={}&status=available",
+        enc("فيلا للبيع"),
+        enc("حي الملقا"),
+        enc("أبو فهد 0500000001"),
+        enc("سالم 0500000002"),
+        enc("المالك مستعجل")
+    );
+    call(app, form("/listings/new", &row, Some(&me))).await;
+    let site = format!(
+        "slug=alnukhba&published=on&company_name={}&tagline={}&services={}&license_no=1200012345&whatsapp=0551234567&phone=0551234567&accent=%230f766e",
+        enc("مكتب النخبة العقاري"),
+        enc("نبيع ونؤجر في شمال الرياض"),
+        enc("تسويق العقارات\nإدارة الأملاك")
+    );
+    let (status, _, location, body) = call(app, form("/site", &site, Some(&me))).await;
+    assert_eq!(status, StatusCode::SEE_OTHER, "{body}");
+    assert_eq!(location.as_deref(), Some("/site?saved=1"));
+    me
+}
+
+#[tokio::test]
+async fn an_agent_publishes_a_site_that_anyone_can_open() {
+    let (app, inbox) = app().await;
+    let me = agent_with_a_site(&app, &inbox).await;
+
+    let (status, _, _, page) = call(&app, get("/site?saved=1", Some(&me))).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(page.contains("مكتب النخبة العقاري") && page.contains("alnukhba"));
+    assert!(page.contains("حي الملقا"), "listings to show or hide");
+
+    for req in [get("/s/alnukhba", None), on_host("alnukhba.localhost", "/")] {
+        let (status, _, _, site) = call(&app, req).await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(site.contains("dir=\"rtl\""));
+        assert!(site.contains("مكتب النخبة العقاري") && site.contains("إدارة الأملاك"));
+        assert!(site.contains("1200012345"), "Fal licence shown");
+        assert!(site.contains("https://wa.me/966551234567"));
+        assert!(site.contains("tel:+966551234567"));
+        assert!(site.contains("حي الملقا") && site.contains("فيلا للبيع"));
+        assert!(site.contains("#0f766e"), "owner's colour");
+        for private in ["0500000001", "0500000002", "مستعجل"] {
+            assert!(!site.contains(private), "leaked {private}");
+        }
+    }
+}
+
+#[tokio::test]
+async fn unknown_or_unpublished_sites_are_not_found() {
+    let (app, inbox) = app().await;
+    let me = agent_with_a_site(&app, &inbox).await;
+    let (status, _, _, _) = call(&app, get("/s/nobody", None)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _, _, _) = call(&app, on_host("nobody.localhost", "/")).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let off = format!("slug=alnukhba&company_name={}", enc("مكتب النخبة العقاري"));
+    call(&app, form("/site", &off, Some(&me))).await;
+    let (status, _, _, _) = call(&app, get("/s/alnukhba", None)).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn a_site_address_never_opens_the_crm() {
+    let (app, inbox) = app().await;
+    agent_with_a_site(&app, &inbox).await;
+    for path in ["/listings/new", "/account", "/login", "/export.csv"] {
+        let (status, _, _, _) = call(&app, on_host("alnukhba.localhost", path)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
+    }
+    // The main address is untouched.
+    let (status, _, _, _) = call(&app, on_host("localhost", "/login")).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn certificates_are_only_approved_for_published_sites() {
+    let (app, inbox) = app().await;
+    agent_with_a_site(&app, &inbox).await;
+    let (status, _, _, _) = call(&app, get("/sites/tls-check?host=alnukhba.localhost", None)).await;
+    assert_eq!(status, StatusCode::OK);
+    for host in ["nobody.localhost", "evil.com", "localhost"] {
+        let (status, _, _, _) =
+            call(&app, get(&format!("/sites/tls-check?host={host}"), None)).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{host}");
+    }
+}
+
+#[tokio::test]
+async fn an_agent_uploads_a_logo_for_their_site() {
+    let (app, inbox) = app().await;
+    let me = agent_with_a_site(&app, &inbox).await;
+    let png: &[u8] = &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3];
+    let mut body = b"--XyZ\r\nContent-Disposition: form-data; name=\"logo\"; filename=\"l.png\"\r\nContent-Type: image/png\r\n\r\n".to_vec();
+    body.extend_from_slice(png);
+    body.extend_from_slice(b"\r\n--XyZ--\r\n");
+    let req = Request::post("/site/logo")
+        .header(header::CONTENT_TYPE, "multipart/form-data; boundary=XyZ")
+        .header(header::COOKIE, &me)
+        .body(Body::from(body))
+        .unwrap();
+    let (status, _, location, _) = call(&app, req).await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert_eq!(location.as_deref(), Some("/site?saved=1"));
+
+    for req in [
+        get("/s/alnukhba/logo", None),
+        on_host("alnukhba.localhost", "/logo"),
+    ] {
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(res.headers()[header::CONTENT_TYPE], "image/png");
+        let bytes = res.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(&bytes[..], png);
+    }
+    let (_, _, _, site) = call(&app, get("/s/alnukhba", None)).await;
+    assert!(site.contains("/s/alnukhba/logo"));
+    let (_, _, _, site) = call(&app, on_host("alnukhba.localhost", "/")).await;
+    assert!(site.contains("src=\"/logo"));
+}
