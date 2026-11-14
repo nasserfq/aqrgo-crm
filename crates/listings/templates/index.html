@@ -5,7 +5,7 @@
 <section class="page-head no-print">
   <div>
     <h1>جدول العروض</h1>
-    <p class="muted count">العروض: <b data-count="{{ listings.len() }}">{{ listings.len() }}</b>{% if !q.is_empty() || !status.is_empty() %} مطابق للبحث{% endif %}</p>
+    <p class="muted count">العروض: <b data-count="{{ listings.len() }}">{{ listings.len() }}</b>{% if filtered %} مطابق للبحث{% endif %}</p>
   </div>
   <a class="btn primary big" href="/listings/new">＋ إضافة عرض</a>
 </section>
@@ -14,7 +14,10 @@
   <form id="filters" class="filters" action="/" method="get" role="search"
         hx-get="/rows" hx-target="#rows" hx-trigger="input changed delay:300ms from:input, change from:select" hx-push-url="false">
     <label class="sr-only" for="q">بحث</label>
-    <input id="q" type="search" name="q" value="{{ q }}" placeholder="بحث: رقم مخطط، حي، اسم، جوال…" autocomplete="off">
+    <span class="search-box">
+      <svg class="search-icon" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m13 13 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg>
+      <input id="q" type="search" name="q" value="{{ q }}" placeholder="رقم مخطط، حي، اسم، جوال…" autocomplete="off" enterkeyhint="search">
+    </span>
     <label class="sr-only" for="status">الحالة</label>
     <select id="status" name="status">
       <option value="">كل الحالات</option>
@@ -24,25 +27,28 @@
     </select>
   </form>
   <div class="actions">
-    <a class="btn" href="/export.csv" onclick="this.href='/export.csv?'+new URLSearchParams(new FormData(document.getElementById('filters')))">تصدير Excel</a>
-    <button class="btn" type="button" onclick="window.print()">طباعة</button>
+    <a class="btn" href="/export.csv" onclick="this.href='/export.csv?'+new URLSearchParams(new FormData(document.getElementById('filters')))">
+      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M10 3v10m0 0-4-4m4 4 4-4M4 16h12" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>تصدير Excel</a>
+    <button class="btn" type="button" onclick="window.print()">
+      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M6 8V3h8v5M6 14H3V8h14v6h-3M6 11h8v6H6z" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>طباعة</button>
   </div>
 </section>
 
 <div class="sheet">
   <h1 class="print-only">جدول العروض العقارية</h1>
   <div class="table-wrap">
-    <table class="grid">
+    <table class="grid listings">
       <thead>
         <tr>
           <th class="num">م</th>
           {% for (_key, label) in fields.iter() %}<th>{{ label }}</th>{% endfor %}
           <th>اليوم والتاريخ</th>
-          <th>الحالة</th>
+          <th class="status">الحالة</th>
         </tr>
       </thead>
       <tbody id="rows">{% include "rows.html" %}</tbody>
     </table>
   </div>
 </div>
+<p class="hint table-tip no-print">اضغط أي صف لفتحه وتعديله.</p>
 {% endblock %}
