@@ -64,6 +64,7 @@ Every push to `main` runs the tests, builds the Docker image on GitHub, pushes i
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google sign-in |
 | `TYPESAFE_API_KEY` | Optional TypeSafe Jev key: skips messages that aren't leads and reads الحالة from the message |
 | `AWS_BEARER_TOKEN_BEDROCK` | Optional Bedrock API key. Each deploy writes it into the server `.env` |
+| `SENTRY_DSN` | Optional Sentry project DSN for error reports. Each deploy writes it into the server `.env` |
 
 Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment called `production` if you want to approve each deploy.
 
@@ -72,5 +73,7 @@ Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment
 - **AWS**: an IAM user with `ses:SendEmail` and `bedrock:InvokeModel`. Instead of giving that user Bedrock access, you can paste a Bedrock API key into `AWS_BEARER_TOKEN_BEDROCK`. Its region must match `AWS_REGION`. If SES is in another region, set `SES_REGION` (for example `us-east-2`). In SES, verify the `aqrgo.com` domain (it gives you DNS records) and request production access. In Bedrock, enable access to the Amazon Nova model in your region.
 - **Google sign-in** (optional): Google Cloud Console → APIs & Services → Credentials → OAuth client (Web). Redirect URI: `https://aqrgo.com/auth/google/callback`.
 - **Telegram**: create a bot with @BotFather, paste the token, and set `TELEGRAM_WEBHOOK_SECRET` to a random string. The app registers its webhook on startup.
+
+- **Sentry** (optional): create a Rust project on sentry.io and save its DSN as the `SENTRY_DSN` secret. Panics and error logs are reported, warnings ride along as breadcrumbs, and each issue is tagged with the deployed commit. Info logs, cookies, IP addresses and query strings are never sent.
 
 Backups: a daily `pg_dump` lands in `/opt/aqrgo-crm/backups` (14 days kept). Copy them off the server too.
