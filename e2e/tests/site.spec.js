@@ -140,6 +140,16 @@ test.describe('a signed-in user', () => {
     await expect(page.locator('.error')).toBeVisible();
   });
 
+  test('is told when a search finds nothing, and can clear it', async ({ page }) => {
+    await signIn(page, freshEmail('nomatch'));
+    await addListing(page, { 'نوع العرض': 'أرض للبيع', 'الموقع': 'حي الملقا' });
+    await page.getByLabel('بحث').fill('لا يوجد مثله');
+    await expect(page.getByText('لا توجد عروض تطابق بحثك')).toBeVisible();
+    await page.getByRole('link', { name: 'مسح البحث' }).click();
+    await expect(page.locator('#rows tr')).toHaveCount(1);
+    await expectNoSidewaysScroll(page);
+  });
+
   test('can open the account page and sign out', async ({ page }) => {
     const email = freshEmail('acct');
     await signIn(page, email);

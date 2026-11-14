@@ -44,6 +44,12 @@ impl FilterQuery {
             status: self.status.as_deref().and_then(Status::parse),
         }
     }
+
+    /// Whether a search or status filter is narrowing the table.
+    fn is_filtered(&self) -> bool {
+        let f = self.to_filter();
+        f.q.is_some() || f.status.is_some()
+    }
 }
 
 #[derive(Template)]
@@ -56,12 +62,14 @@ struct IndexPage {
     status: String,
     statuses: [Status; 3],
     fields: &'static [(&'static str, &'static str)],
+    filtered: bool,
 }
 
 #[derive(Template)]
 #[template(path = "rows.html")]
 struct RowsPartial {
     listings: Vec<Listing>,
+    filtered: bool,
 }
 
 #[derive(Template)]
@@ -76,7 +84,6 @@ struct FormPage {
     date_label: String,
     error: Option<String>,
     statuses: [Status; 3],
-    fields: &'static [(&'static str, &'static str)],
     suggestions: &'static [&'static str],
 }
 
@@ -99,9 +106,13 @@ impl FormPage {
             input,
             error,
             statuses: Status::ALL,
-            fields: FIELDS,
             suggestions: OFFER_TYPE_SUGGESTIONS,
         }
+    }
+
+    /// The form's fields in titled groups, so a long form reads in steps.
+    fn sections(&self) -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
+        form_sections()
     }
 
     fn is_multiline(&self, key: &str) -> bool {
@@ -110,6 +121,40 @@ impl FormPage {
             "frontages" | "buyer" | "seller" | "broker" | "income" | "details"
         )
     }
+}
+
+/// The listing form's groups: (title, keys). Every key in [`FIELDS`] is in exactly one.
+const FORM_SECTIONS: &[(&str, &[&str])] = &[
+    (
+        "العقار",
+        &[
+            "offer_type",
+            "location",
+            "plan_no",
+            "plot_no",
+            "area",
+            "price",
+            "frontages",
+        ],
+    ),
+    ("الأطراف", &["seller", "buyer", "broker"]),
+    (
+        "تفاصيل المبنى",
+        &["rooms", "bathrooms", "floors", "units", "income", "details"],
+    ),
+];
+
+fn form_sections() -> Vec<(&'static str, Vec<(&'static str, &'static str)>)> {
+    FORM_SECTIONS
+        .iter()
+        .map(|(title, keys)| {
+            let fields = keys
+                .iter()
+                .filter_map(|k| FIELDS.iter().find(|(key, _)| key == k).copied())
+                .collect();
+            (*title, fields)
+        })
+        .collect()
 }
 
 /// Error shown to the browser. Database details are only logged.
@@ -155,6 +200,7 @@ async fn index(
         status: fq.status.clone().unwrap_or_default(),
         statuses: Status::ALL,
         fields: FIELDS,
+        filtered: fq.is_filtered(),
     })
 }
 
@@ -164,7 +210,10 @@ async fn rows(
     Query(fq): Query<FilterQuery>,
 ) -> Result<Html<String>, WebError> {
     let listings = svc.list(user.id, &fq.to_filter()).await?;
-    page(&RowsPartial { listings })
+    page(&RowsPartial {
+        listings,
+        filtered: fq.is_filtered(),
+    })
 }
 
 async fn new_form(Extension(user): Extension<CurrentUser>) -> Result<Html<String>, WebError> {
@@ -375,5 +424,22 @@ mod tests {
         assert!(csv.contains("\"شمالية \"\"30م\"\"\""));
         assert!(csv.contains("\"مباع\""));
         assert!(csv.contains("\"عدد الغرف\"") && csv.contains("\"مصعد\""));
+    }
+}
+
+#[cfg(test)]
+mod form_tests {
+    use super::*;
+
+    #[test]
+    fn form_sections_hold_every_field_once() {
+        let mut keys: Vec<&str> = form_sections()
+            .into_iter()
+            .flat_map(|(_, fields)| fields.into_iter().map(|(k, _)| k))
+            .collect();
+        keys.sort_unstable();
+        let mut all: Vec<&str> = FIELDS.iter().map(|(k, _)| *k).collect();
+        all.sort_unstable();
+        assert_eq!(keys, all);
     }
 }
