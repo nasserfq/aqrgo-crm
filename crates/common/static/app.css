@@ -194,6 +194,19 @@ table.grid { border-collapse: collapse; width: 100%; min-width: 1200px; font-siz
 .stack { display: flex; flex-direction: column; gap: 14px; }
 .inline-form { margin-top: 16px; color: var(--muted); font-size: 14px; }
 
+/* Site settings (موقعي). */
+.slug-input { display: flex; align-items: stretch; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.slug-input input { flex: 1; min-width: 0; border: 0 !important; border-radius: 0; box-shadow: none !important; }
+.slug-input b { display: flex; align-items: center; padding: 0 12px; background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; white-space: nowrap; }
+.field.site-listings { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px 14px; margin: 0; grid-column: 1 / -1; }
+.site-listings legend { font-weight: 600; font-size: 13.5px; padding: 0 6px; }
+.check { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
+.check input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); flex: none; }
+.check.publish { grid-column: 1 / -1; font-weight: 600; }
+.field input[type=color] { width: 100%; height: 44px; padding: 4px; cursor: pointer; }
+.logo-form { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.logo-preview { width: 64px; height: 64px; object-fit: contain; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+
 /* Login: an editorial split with a living pixel field. */
 .auth-page { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
 .auth-page main { display: flex; align-items: center; justify-content: center; padding: 48px clamp(20px, 5vw, 72px); }

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}موقعي{% endblock %}
+{% block nav %}{% include "nav.html" %}{% endblock %}
+{% block content %}
+<section class="card form-card site-settings">
+  <div class="card-head">
+    <h1>موقعي</h1>
+    {% if exists && input.published %}
+    <a class="btn" href="{{ site_url }}" target="_blank" rel="noopener">عرض الموقع</a>
+    {% endif %}
+  </div>
+  <p class="muted">صفحة تعريفية لمكتبك يراها عملاؤك: خدماتك، رخصة فال، أزرار الاتصال وواتساب، وعروضك المتاحة من جدولك تظهر فيها تلقائياً.</p>
+  {% if saved %}
+  <p class="ok">✓ تم الحفظ.{% if input.published %} موقعك منشور على <a href="{{ site_url }}" target="_blank" rel="noopener" dir="ltr">{{ site_url }}</a>{% else %} الموقع غير منشور بعد.{% endif %}</p>
+  {% endif %}
+  {% if let Some(err) = error %}<p class="error">{{ err }}</p>{% endif %}
+
+  <form method="post" action="/site" class="fields">
+    <label class="field wide">
+      <span>عنوان الموقع</span>
+      <span class="slug-input" dir="ltr"><input name="slug" value="{{ input.slug }}" placeholder="alnukhba" required pattern="[A-Za-z0-9-]{3,30}" autocapitalize="off" spellcheck="false"><b>.{{ base_domain }}</b></span>
+      <small class="hint">حروف إنجليزية وأرقام وشرطة (-) فقط، من ٣ إلى ٣٠ حرفاً.</small>
+    </label>
+    <label class="field">
+      <span>اسم المكتب</span>
+      <input name="company_name" value="{{ input.company_name }}">
+    </label>
+    <label class="field">
+      <span>رقم رخصة فال</span>
+      <input name="license_no" value="{{ input.license_no }}" inputmode="numeric">
+    </label>
+    <label class="field wide">
+      <span>العبارة الرئيسية</span>
+      <input name="tagline" value="{{ input.tagline }}" placeholder="مثال: نبيع ونؤجر العقارات في شمال الرياض">
+    </label>
+    <label class="field wide">
+      <span>نبذة عن المكتب</span>
+      <textarea name="about" rows="3">{{ input.about }}</textarea>
+    </label>
+    <label class="field wide">
+      <span>الخدمات</span>
+      <textarea name="services" rows="4" placeholder="خدمة في كل سطر">{{ input.services }}</textarea>
+      <small class="hint">اكتب كل خدمة في سطر.</small>
+    </label>
+    <label class="field">
+      <span>رقم الجوال</span>
+      <input name="phone" value="{{ input.phone }}" inputmode="tel" dir="ltr">
+    </label>
+    <label class="field">
+      <span>رقم واتساب</span>
+      <input name="whatsapp" value="{{ input.whatsapp }}" inputmode="tel" dir="ltr" placeholder="05xxxxxxxx">
+    </label>
+    <label class="field">
+      <span>البريد الإلكتروني</span>
+      <input name="email" type="email" value="{{ input.email }}" dir="ltr">
+    </label>
+    <label class="field">
+      <span>اللون الرئيسي</span>
+      <input name="accent" type="color" value="{{ input.accent }}">
+    </label>
+    <label class="field wide">
+      <span>عنوان المكتب</span>
+      <input name="address" value="{{ input.address }}">
+    </label>
+    <label class="field wide">
+      <span>رابط الموقع على الخريطة</span>
+      <input name="map_url" value="{{ input.map_url }}" dir="ltr" placeholder="https://maps.app.goo.gl/...">
+    </label>
+
+    <fieldset class="field wide site-listings">
+      <legend>العروض في الموقع</legend>
+      {% if choices.is_empty() %}
+      <p class="muted">لا توجد عروض متاحة في جدولك بعد. كل عرض حالته «متاح» يظهر هنا.</p>
+      {% else %}
+      <p class="hint">تظهر العروض المتاحة فقط، وبدون بيانات المالك والمشتري والوسيط ورقم القطعة والملاحظات. أزل العلامة لإخفاء عرض.</p>
+      {% for c in choices %}
+      <label class="check">
+        <input type="hidden" name="listed" value="{{ c.id }}">
+        <input type="checkbox" name="show" value="{{ c.id }}" {% if c.shown %}checked{% endif %}>
+        <span>{{ c.label }}</span>
+      </label>
+      {% endfor %}
+      {% endif %}
+    </fieldset>
+
+    <label class="check wide publish">
+      <input type="checkbox" name="published" {% if input.published %}checked{% endif %}>
+      <span>نشر الموقع ليراه الجميع</span>
+    </label>
+    <div class="form-actions">
+      <button class="btn primary" type="submit">حفظ</button>
+    </div>
+  </form>
+
+  <h2>الشعار</h2>
+  {% if exists %}
+  <form method="post" action="/site/logo" enctype="multipart/form-data" class="logo-form">
+    {% if has_logo %}<img src="/site/logo" alt="الشعار" class="logo-preview">{% endif %}
+    <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
+    <button class="btn" type="submit">رفع الشعار</button>
+    <small class="hint">PNG أو JPG أو WebP، حتى ٥١٢ كيلوبايت.</small>
+  </form>
+  {% else %}
+  <p class="muted">احفظ بيانات الموقع أولاً ثم ارفع الشعار.</p>
+  {% endif %}
+</section>
+{% endblock %}

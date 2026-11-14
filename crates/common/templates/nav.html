@@ -3,6 +3,7 @@
   <a class="brand" href="/">{% include "logo_mark.html" %}AQRGO <span>CRM</span></a>
   <nav>
     <a href="/" {% if nav == common::ui::Nav::Listings %}class="active"{% endif %}>العروض</a>
+    <a href="/site" {% if nav == common::ui::Nav::Site %}class="active"{% endif %}>موقعي</a>
     <a href="/account" {% if nav == common::ui::Nav::Account %}class="active"{% endif %}>حسابي<span class="nav-long"> وتيليجرام</span></a>
   </nav>
   <div class="who">

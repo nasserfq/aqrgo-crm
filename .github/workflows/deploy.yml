@@ -185,4 +185,13 @@ jobs:
             docker exec kamal-proxy kamal-proxy deploy aqrgo-crm \
               --target aqrgo-crm-app:8080 --host "$APP_DOMAIN" --host "www.$APP_DOMAIN" --tls \
               --health-check-path /healthz
+            # Agents' sites at <name>.$APP_DOMAIN (wildcard DNS on Cloudflare): a
+            # catch-all service that gets a certificate per host on first visit,
+            # only after the app confirms the host is a published site.
+            if ! docker exec kamal-proxy kamal-proxy deploy aqrgo-sites \
+              --target aqrgo-crm-app:8080 --tls \
+              --tls-on-demand-url "http://aqrgo-crm-app:8080/sites/tls-check" \
+              --health-check-path /healthz; then
+              echo "::warning::Agent sites at *.$APP_DOMAIN are not routed (kamal-proxy refused the catch-all service). Agent sites will not open until this is fixed on the server."
+            fi
             echo "Deployed $IMAGE"
