@@ -32,3 +32,16 @@ A row carries every stored field plus `number` (running number in Arabic-Indic
 digits), `status_label`, `date_hijri` and `date_gregorian`, ready to show.
 Invalid input (no offer type, location or plan number; a bad date or status)
 answers `422` with the Arabic message to show.
+
+## Push notifications
+
+| Call | Answer |
+| --- | --- |
+| `POST /api/v1/push/devices` `{"token": "ExponentPushToken[...]", "platform": "ios" \| "android"}` | `204`. A phone belongs to whoever signed in on it last. |
+| `DELETE /api/v1/push/devices` `{"token": "..."}` | `204`. Sent by the app on sign-out. |
+
+New rows that arrive from Telegram (and WhatsApp, once that channel lands)
+notify every phone of their owner: title «عرض جديد من تيليجرام», body
+«نوع العرض · الموقع», data `{"listing_id": N}`. Rows typed in on the web or the
+app don't notify. Sending runs in a background job (`push.notify`) through
+Expo's push service; phones that uninstalled the app are forgotten.

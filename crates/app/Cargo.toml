@@ -17,6 +17,7 @@ telegram.workspace = true
 jobs.workspace = true
 mailer.workspace = true
 ai.workspace = true
+push.workspace = true
 axum.workspace = true
 tokio.workspace = true
 sqlx.workspace = true

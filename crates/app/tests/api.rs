@@ -293,3 +293,51 @@ async fn the_app_can_read_the_form_choices() {
     assert_eq!(meta["statuses"][2]["value"], "sold");
     assert_eq!(meta["statuses"][2]["label"], "مباع");
 }
+
+#[tokio::test]
+async fn a_phone_registers_for_notifications() {
+    let (app, inbox) = app().await;
+    let me = sign_in(&app, &inbox, "nasser@example.com").await;
+    let device = json!({ "token": "ExponentPushToken[abc]", "platform": "ios" });
+
+    let (status, _) = call(
+        &app,
+        Method::POST,
+        "/api/v1/push/devices",
+        None,
+        Some(device.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, _) = call(
+        &app,
+        Method::POST,
+        "/api/v1/push/devices",
+        Some(&me),
+        Some(device.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/push/devices",
+        Some(&me),
+        Some(json!({ "token": "nope", "platform": "ios" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body["error"], "رمز الإشعارات غير صحيح");
+
+    let (status, _) = call(
+        &app,
+        Method::DELETE,
+        "/api/v1/push/devices",
+        Some(&me),
+        Some(device),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
