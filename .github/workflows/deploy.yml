@@ -185,4 +185,11 @@ jobs:
             docker exec kamal-proxy kamal-proxy deploy aqrgo-crm \
               --target aqrgo-crm-app:8080 --host "$APP_DOMAIN" --host "www.$APP_DOMAIN" --tls \
               --health-check-path /healthz
+            # Agents' sites at <name>.$APP_DOMAIN: the wildcard DNS record is proxied by
+            # Cloudflare, which serves HTTPS and reaches the server over HTTP. A
+            # catch-all (hostless) service sends those hosts to the app.
+            if ! docker exec kamal-proxy kamal-proxy deploy aqrgo-sites \
+              --target aqrgo-crm-app:8080 --health-check-path /healthz; then
+              echo "::warning::Agent sites at *.$APP_DOMAIN are not routed (kamal-proxy refused the catch-all service)."
+            fi
             echo "Deployed $IMAGE"
