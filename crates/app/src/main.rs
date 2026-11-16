@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
             }),
     );
 
-    // Background worker: emails + Telegram updates + WhatsApp messages.
+    // Background worker: emails, phone notifications, Telegram updates and WhatsApp messages.
     let ses = mailer::SesSender {
         client: aws.as_ref().filter(|_| cfg.mail_from.is_some()).map(|a| {
             let mut ses = aws_sdk_sesv2::config::Builder::from(a);
@@ -116,6 +116,11 @@ async fn main() -> anyhow::Result<()> {
         from: cfg.mail_from.clone().unwrap_or_default(),
     };
     let mut worker = mailer::register(jobs.worker(), ses);
+    worker = push::register(
+        worker,
+        modules.push.clone(),
+        Arc::new(push::ExpoSender::new(cfg.expo_access_token.clone())),
+    );
     if tg_api.is_some() || wa_api.is_some() {
         let extractor: Option<Arc<dyn ai::LeadExtractor>> = aws.as_ref().map(|a| {
             let model = cfg

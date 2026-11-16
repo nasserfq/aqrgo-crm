@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use sqlx::PgPool;
 
 use crate::model::{Listing, ListingInput, Source, Status};
@@ -19,15 +21,31 @@ pub struct Filter {
 const COLUMNS: &str = "id, ref_no, offer_type, plan_no, plot_no, area, frontages, location, price, buyer, seller, broker, \
                        rooms, bathrooms, floors, units, income, details, listed_on, status, source";
 
+/// Told about every new row after it is saved (e.g. to send a push
+/// notification). A failing listener never fails the save.
+#[async_trait::async_trait]
+pub trait ListingListener: Send + Sync {
+    async fn created(&self, owner: i64, listing: &Listing, source: Source) -> Result<(), String>;
+}
+
 /// The only way other modules read or write listings.
 #[derive(Clone)]
 pub struct ListingsService {
     pool: PgPool,
+    listeners: Vec<Arc<dyn ListingListener>>,
 }
 
 impl ListingsService {
     pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+        Self {
+            pool,
+            listeners: Vec::new(),
+        }
+    }
+
+    pub fn with_listener(mut self, listener: Arc<dyn ListingListener>) -> Self {
+        self.listeners.push(listener);
+        self
     }
 
     pub async fn list(&self, owner: i64, filter: &Filter) -> Result<Vec<Listing>, ListingsError> {
@@ -127,6 +145,11 @@ impl ListingsService {
             .fetch_one(&mut *tx)
             .await?;
         tx.commit().await?;
+        for l in &self.listeners {
+            if let Err(e) = l.created(owner, &listing, source).await {
+                tracing::warn!(error = %e, listing = listing.id, "listing listener failed");
+            }
+        }
         Ok(listing)
     }
 

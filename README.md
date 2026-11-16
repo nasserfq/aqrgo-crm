@@ -13,6 +13,7 @@ See [docs/spec.md](docs/spec.md) for what was agreed.
 | `telegram` | schema `telegram` | Bot conversation (shared by both chat apps), drafts, Telegram webhook |
 | `whatsapp` | schema `whatsapp` | WhatsApp Cloud API webhook (signed), replies as buttons and lists |
 | `ai` | — | Amazon Bedrock lead extraction, plus optional TypeSafe Jev judgments (is it a lead, الحالة) |
+| `sites` | schema `sites` | Each user's public one-page website (موقعي): company profile, Fal licence, contact buttons and their available listings |
 | `jobs` | schema `jobs` | Postgres job queue + worker |
 | `mailer` | — | Sends email via AWS SES from a job |
 | `common` | — | Shared types, Hijri dates, Arabic digits, layout |
@@ -74,5 +75,7 @@ Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment
 - **Google sign-in** (optional): Google Cloud Console → APIs & Services → Credentials → OAuth client (Web). Redirect URI: `https://aqrgo.com/auth/google/callback`.
 - **Telegram**: create a bot with @BotFather, paste the token, and set `TELEGRAM_WEBHOOK_SECRET` to a random string. The app registers its webhook on startup.
 - **WhatsApp**: Meta WhatsApp Cloud API, direct. Step by step in [`docs/whatsapp-setup.md`](docs/whatsapp-setup.md).
+
+**Agent websites** (موقعي): every user can publish a one-page site at `https://<name>.aqrgo.com` (old `aqrgo.com/s/<name>` links redirect there). It shows only available listings and never buyer, seller, broker, plot number, income or notes. DNS is a wildcard `*.aqrgo.com` A record on Cloudflare, **proxied**, with a configuration rule setting SSL to Flexible for those hosts: Cloudflare serves HTTPS and reaches the server over HTTP, where a catch-all kamal-proxy service `aqrgo-sites` sends them to the app. (The server's kamal-proxy is too old for `--tls-on-demand-url`; once it is upgraded, `/sites/tls-check?host=` is ready to approve per-site certificates and custom domains.)
 
 Backups: a daily `pg_dump` lands in `/opt/aqrgo-crm/backups` (14 days kept). Copy them off the server too.

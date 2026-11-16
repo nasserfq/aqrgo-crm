@@ -1,25 +1,25 @@
 {% for l in listings %}
 <tr onclick="location.href='/listings/{{ l.id }}'" tabindex="0" onkeydown="if(event.key==='Enter')location.href='/listings/{{ l.id }}'">
   <td class="num">{{ l.number() }}{% if l.source == "telegram" %}<span class="src" title="أضيف من تيليجرام">✈</span>{% elif l.source == "whatsapp" %}<span class="src" title="أضيف من واتساب">✆</span>{% endif %}</td>
-  <td class="strong">{{ l.offer_type }}</td>
-  <td>{{ l.plan_no }}</td>
-  <td>{{ l.plot_no }}</td>
-  <td class="nowrap">{{ l.area }}</td>
-  <td class="wrap">{{ l.frontages }}</td>
-  <td class="wrap">{{ l.location }}</td>
-  <td class="nowrap">{{ l.price }}</td>
-  <td class="wrap">{{ l.buyer }}</td>
-  <td class="wrap">{{ l.seller }}</td>
-  <td class="wrap">{{ l.broker }}</td>
-  <td class="nowrap">{{ l.rooms }}</td>
-  <td class="nowrap">{{ l.bathrooms }}</td>
-  <td class="nowrap">{{ l.floors }}</td>
-  <td class="nowrap">{{ l.units }}</td>
-  <td class="wrap">{{ l.income }}</td>
-  <td class="wrap details">{{ l.details }}</td>
+  <td class="strong offer">{{ l.offer_type }}</td>
+  <td data-label="رقم المخطط">{{ l.plan_no }}</td>
+  <td data-label="رقم القطعة">{{ l.plot_no }}</td>
+  <td class="nowrap" data-label="المساحة">{{ l.area }}</td>
+  <td class="wrap" data-label="الواجهات">{{ l.frontages }}</td>
+  <td class="wrap loc" data-label="الموقع">{{ l.location }}</td>
+  <td class="nowrap price" data-label="السعر">{{ l.price }}</td>
+  <td class="wrap" data-label="المشتري">{{ l.buyer }}</td>
+  <td class="wrap" data-label="البائع">{{ l.seller }}</td>
+  <td class="wrap" data-label="الوسيط">{{ l.broker }}</td>
+  <td class="nowrap" data-label="الغرف">{{ l.rooms }}</td>
+  <td class="nowrap" data-label="دورات المياه">{{ l.bathrooms }}</td>
+  <td class="nowrap" data-label="الأدوار">{{ l.floors }}</td>
+  <td class="nowrap" data-label="الوحدات">{{ l.units }}</td>
+  <td class="wrap" data-label="الدخل">{{ l.income }}</td>
+  <td class="wrap details" data-label="تفاصيل">{{ l.details }}</td>
   <td class="date">{{ l.date_hijri() }}<br><bdi dir="ltr">{{ l.date_gregorian() }}</bdi></td>
-  <td><span class="pill {{ l.status }}">{{ l.status().label_ar() }}</span></td>
+  <td class="status"><span class="pill {{ l.status }}">{{ l.status().label_ar() }}</span></td>
 </tr>
 {% else %}
-<tr class="empty"><td colspan="19"><strong>لا توجد عروض هنا بعد</strong><br>أضف عرضاً من الموقع، أو الصق رسالة الوسيط في بوت تيليجرام.<div class="empty-actions"><a class="btn primary" href="/listings/new">＋ إضافة عرض</a><a class="btn" href="/account">ربط تيليجرام</a></div></td></tr>
+<tr class="empty"><td colspan="19"><strong>{% if filtered %}لا توجد عروض تطابق بحثك{% else %}لا توجد عروض هنا بعد{% endif %}</strong>{% if filtered %}جرّب كلمة أخرى أو اختر «كل الحالات».<div class="empty-actions"><a class="btn" href="/">مسح البحث</a></div>{% else %}أضف عرضاً من الموقع، أو الصق رسالة الوسيط في بوت تيليجرام.<div class="empty-actions"><a class="btn primary" href="/listings/new">＋ إضافة عرض</a><a class="btn" href="/account">ربط تيليجرام</a></div>{% endif %}</td></tr>
 {% endfor %}

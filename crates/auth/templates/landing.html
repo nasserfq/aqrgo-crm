@@ -5,7 +5,11 @@
 <div class="topbar-wrap">
 <header class="topbar">
   <a class="brand" href="/">{% include "logo_mark.html" %}AQRGO <span>CRM</span></a>
-  <nav></nav>
+  <nav aria-label="أقسام الصفحة">
+    <a href="#how">كيف يعمل</a>
+    <a href="#site">موقعك</a>
+    <a href="#features">المزايا</a>
+  </nav>
   <a class="btn" href="/login">تسجيل الدخول</a>
 </header>
 <div class="pixel-band" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
@@ -66,7 +70,7 @@
   </div>
 </section>
 
-<section class="l-how reveal">
+<section class="l-how reveal" id="how">
   <h2>من رسالة إلى صف في ثلاث خطوات</h2>
   <ol class="steps">
     <li><h3>أرسل</h3><p>اربط حسابك بتيليجرام مرة واحدة، ثم الصق أي عرض في البوت.</p></li>
@@ -75,7 +79,32 @@
   </ol>
 </section>
 
-<section class="l-bento reveal">
+<section class="l-site reveal" id="site">
+  <div class="l-site-copy">
+    <span class="eyebrow">جديد</span>
+    <h2>موقع لمكتبك، يتحدث من جدولك</h2>
+    <p class="lede">اختر اسماً واحصل على صفحة لمكتبك على <bdi dir="ltr">name.aqrgo.com</bdi>. كل عرض حالته «متاح» يظهر فيها تلقائياً، وكل عرض تبيعه يختفي منها.</p>
+    <ul class="ticks">
+      <li><b>رخصة فال ظاهرة.</b> رقم رخصتك في أعلى الصفحة وفي قسم خاص.</li>
+      <li><b>زر واتساب لكل عرض.</b> العميل يسأل عن العرض نفسه برسالة جاهزة.</li>
+      <li><b>خصوصية الأطراف.</b> لا يظهر المالك ولا المشتري ولا الوسيط ولا رقم القطعة.</li>
+    </ul>
+  </div>
+  <div class="browser" aria-label="مثال لموقع مكتب على AQRGO">
+    <div class="browser-bar"><i></i><i></i><i></i><span dir="ltr">alnukhba.aqrgo.com</span></div>
+    <div class="browser-body">
+      <span class="b-badge">وسيط عقاري مرخّص · فال</span>
+      <b class="b-title">نبيع ونؤجر العقارات في شمال الرياض</b>
+      <div class="b-cards">
+        <div class="b-card"><small>أرض للبيع</small><b>حي الملقا</b><span>على السوم</span></div>
+        <div class="b-card"><small>فيلا للإيجار</small><b>حي النرجس</b><span>120 ألف سنوياً</span></div>
+      </div>
+      <span class="b-wa">راسلنا على واتساب</span>
+    </div>
+  </div>
+</section>
+
+<section class="l-bento reveal" id="features">
   <article class="tile tile-wide tile-dark">
     <h3>كل التفاصيل في عمودها</h3>
     <p>المخطط والقطعة والمساحة والواجهات والسعر، وأيضاً الغرف ودورات المياه والأدوار والوحدات والدخل والعقود.</p>
@@ -102,7 +131,11 @@
 </section>
 
 <footer class="l-foot muted">
-  <span>AQRGO CRM</span>
-  <a class="link" href="/login">تسجيل الدخول</a>
+  <a class="brand small" href="/">{% include "logo_mark.html" %}AQRGO <span>CRM</span></a>
+  <nav aria-label="روابط">
+    <a class="link" href="#how">كيف يعمل</a>
+    <a class="link" href="#site">موقعك</a>
+    <a class="link" href="/login">تسجيل الدخول</a>
+  </nav>
 </footer>
 {% endblock %}

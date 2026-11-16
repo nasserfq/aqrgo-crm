@@ -36,6 +36,23 @@ jobs:
       - run: cargo test --workspace --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
+  mobile:
+    # The iOS and Android app (Expo). Store builds run on EAS, not here.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx jest --ci
+
   e2e:
     # Drives the real app in Chromium at desktop and phone sizes.
     runs-on: ubuntu-latest
@@ -128,6 +145,7 @@ jobs:
       WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
       WHATSAPP_APP_SECRET: ${{ secrets.WHATSAPP_APP_SECRET }}
       WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
+      EXPO_ACCESS_TOKEN: ${{ secrets.EXPO_ACCESS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - name: Copy compose files to the server
@@ -147,7 +165,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT || 22 }}
-          envs: DEPLOY_DIR,APP_DOMAIN,IMAGE,AWS_BEARER_TOKEN_BEDROCK,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,TELEGRAM_BOT_TOKEN,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,TYPESAFE_API_KEY,WHATSAPP_TOKEN,WHATSAPP_PHONE_NUMBER_ID,WHATSAPP_APP_SECRET,WHATSAPP_VERIFY_TOKEN
+          envs: DEPLOY_DIR,APP_DOMAIN,IMAGE,AWS_BEARER_TOKEN_BEDROCK,AWS_ACCESS_KEY_ID,AWS_SECRET_ACCESS_KEY,TELEGRAM_BOT_TOKEN,GOOGLE_CLIENT_ID,GOOGLE_CLIENT_SECRET,TYPESAFE_API_KEY,EXPO_ACCESS_TOKEN,WHATSAPP_TOKEN,WHATSAPP_PHONE_NUMBER_ID,WHATSAPP_APP_SECRET,WHATSAPP_VERIFY_TOKEN
           script: |
             set -e
             cd "$DEPLOY_DIR"
@@ -162,7 +180,7 @@ jobs:
             # The public address is set here so changing it needs no server edits.
             DOMAIN="$APP_DOMAIN"; PUBLIC_URL="https://$APP_DOMAIN"
             # Secrets kept in GitHub are written into .env so they never live in the repo.
-            for name in DOMAIN PUBLIC_URL AWS_BEARER_TOKEN_BEDROCK AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TELEGRAM_BOT_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET TYPESAFE_API_KEY WHATSAPP_TOKEN WHATSAPP_PHONE_NUMBER_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN; do
+            for name in DOMAIN PUBLIC_URL AWS_BEARER_TOKEN_BEDROCK AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY TELEGRAM_BOT_TOKEN GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET TYPESAFE_API_KEY EXPO_ACCESS_TOKEN WHATSAPP_TOKEN WHATSAPP_PHONE_NUMBER_ID WHATSAPP_APP_SECRET WHATSAPP_VERIFY_TOKEN; do
               value="${!name}"
               [ -n "$value" ] || continue
               grep -v "^$name=" .env > .env.new || true
@@ -189,4 +207,11 @@ jobs:
             docker exec kamal-proxy kamal-proxy deploy aqrgo-crm \
               --target aqrgo-crm-app:8080 --host "$APP_DOMAIN" --host "www.$APP_DOMAIN" --tls \
               --health-check-path /healthz
+            # Agents' sites at <name>.$APP_DOMAIN: the wildcard DNS record is proxied by
+            # Cloudflare, which serves HTTPS and reaches the server over HTTP. A
+            # catch-all (hostless) service sends those hosts to the app.
+            if ! docker exec kamal-proxy kamal-proxy deploy aqrgo-sites \
+              --target aqrgo-crm-app:8080 --health-check-path /healthz; then
+              echo "::warning::Agent sites at *.$APP_DOMAIN are not routed (kamal-proxy refused the catch-all service)."
+            fi
             echo "Deployed $IMAGE"

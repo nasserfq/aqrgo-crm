@@ -2,20 +2,32 @@
 {% block title %}حسابي{% endblock %}
 {% block nav %}{% include "nav.html" %}{% endblock %}
 {% block content %}
-<section class="card narrow">
+<section class="card narrow account">
+  <span class="eyebrow">الحساب</span>
   <h1>حسابي</h1>
-  <p class="muted" dir="ltr">{{ user.email }}</p>
+  <div class="profile">
+    <span class="avatar" aria-hidden="true">{{ user.name.chars().next().unwrap_or('A') }}</span>
+    <div><b>{{ user.name }}</b><span class="muted" dir="ltr">{{ user.email }}</span></div>
+  </div>
 
   <h2>ربط تيليجرام</h2>
   {% if let Some(bot) = telegram_bot %}
     {% if telegram_linked %}
       <p class="ok">✓ حساب تيليجرام مربوط. أرسل العروض إلى <a href="https://t.me/{{ bot }}" dir="ltr">@{{ bot }}</a> وسأعرض عليك كل عرض لتأكيده قبل حفظه في جدولك.</p>
-      <form method="post" action="/account/telegram/unlink" onsubmit="return confirm('إلغاء ربط تيليجرام؟')">
-        <button class="btn danger" type="submit">إلغاء الربط</button>
-      </form>
+      <div class="row-actions">
+        <a class="btn primary" href="https://t.me/{{ bot }}" target="_blank" rel="noopener">افتح البوت</a>
+        <form method="post" action="/account/telegram/unlink" onsubmit="return confirm('إلغاء ربط تيليجرام؟')">
+          <button class="btn danger" type="submit">إلغاء الربط</button>
+        </form>
+      </div>
       <p class="muted">لربط حساب تيليجرام آخر بدلاً منه:</p>
     {% else %}
       <p>اربط حساب تيليجرام لترسل العروض للبوت، فيرتبها ويعرضها عليك للتأكيد ثم يحفظها في جدولك.</p>
+      <ol class="mini-steps">
+        <li><b>أنشئ رابط الربط</b> من الزر بالأسفل.</li>
+        <li><b>افتح تيليجرام</b> واضغط «ابدأ» في محادثة البوت.</li>
+        <li><b>الصق أي عرض</b> يصلك، وأكّده بضغطة.</li>
+      </ol>
     {% endif %}
     {% if let Some(url) = telegram_link_url %}
       <a class="btn primary" href="{{ url }}" target="_blank" rel="noopener">افتح تيليجرام واضغط «ابدأ»</a>
@@ -47,5 +59,9 @@
   {% else %}
     <p class="muted">واتساب غير مُعد بعد.</p>
   {% endif %}
+
+  <h2>موقعك</h2>
+  <p class="muted">صفحة لمكتبك تعرض عروضك المتاحة وأزرار الاتصال وواتساب.</p>
+  <a class="btn" href="/site">إعداد موقعي</a>
 </section>
 {% endblock %}

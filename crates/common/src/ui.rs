@@ -11,6 +11,7 @@ pub fn render<T: Template>(t: &T) -> Result<String, String> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Nav {
     Listings,
+    Site,
     Account,
     None,
 }
