@@ -5,6 +5,9 @@ export type Status = 'available' | 'reserved' | 'sold';
 
 export type User = { id: number; email: string; name: string };
 
+export type ChannelName = 'telegram' | 'whatsapp';
+export type Channels = Record<ChannelName, { available: boolean; linked: boolean }>;
+
 export type Listing = {
   id: number;
   ref_no: number;
@@ -127,6 +130,13 @@ export function createApi(opts: Options) {
       }),
     /** Deletes the account and everything in it. */
     deleteAccount: () => request<void>('DELETE', '/api/v1/me'),
+
+    /** Which chat bots the server runs, and which this account has linked. */
+    channels: () => request<Channels>('GET', '/api/v1/channels'),
+    /** A one-time link that opens the bot and ties that chat to this account. */
+    linkChannel: async (channel: ChannelName) =>
+      (await request<{ url: string }>('POST', `/api/v1/channels/${channel}/link`)).url,
+    unlinkChannel: (channel: ChannelName) => request<void>('DELETE', `/api/v1/channels/${channel}`),
 
     listListings: async (filter: { q?: string; status?: Status | '' }) => {
       const params: string[] = [];

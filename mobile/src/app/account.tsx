@@ -1,10 +1,12 @@
-// The account screen: who is signed in, sign out, privacy, and deleting the
-// account (App Store rules require deletion inside the app).
-import { useState } from 'react';
-import { Alert, Linking, ScrollView, View } from 'react-native';
+// The account screen: who is signed in, linking the Telegram and WhatsApp
+// bots, sign out, privacy, and deleting the account (App Store rules require
+// deletion inside the app).
+import { useCallback, useState } from 'react';
+import { Alert, AppState, Linking, ScrollView, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
 import { Button, Note, T } from '../components/ui';
-import { ApiError } from '../lib/api';
+import { ApiError, type ChannelName, type Channels } from '../lib/api';
 import { API_URL, useSession } from '../lib/session';
 import { fonts, useColors } from '../lib/theme';
 
@@ -13,6 +15,39 @@ export default function Account() {
   const c = useColors();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [channels, setChannels] = useState<Channels | null>(null);
+
+  const refresh = useCallback(() => {
+    api.channels().then(setChannels, () => setChannels(null));
+  }, [api]);
+
+  // Linking finishes in Telegram or WhatsApp, so check again on coming back.
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+      const sub = AppState.addEventListener('change', (s) => s === 'active' && refresh());
+      return () => sub.remove();
+    }, [refresh]),
+  );
+
+  const link = async (channel: ChannelName) => {
+    setError(null);
+    try {
+      await Linking.openURL(await api.linkChannel(channel));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'تعذر فتح التطبيق، حاول مرة أخرى');
+    }
+  };
+
+  const unlink = async (channel: ChannelName) => {
+    setError(null);
+    try {
+      await api.unlinkChannel(channel);
+      refresh();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'حدث خطأ، حاول مرة أخرى');
+    }
+  };
 
   const deleteAccount = async () => {
     setBusy(true);
@@ -45,6 +80,20 @@ export default function Account() {
         </T>
       </View>
       {error ? <Note>{error}</Note> : null}
+      {CHANNELS.filter(({ key }) => channels?.[key].available).map(({ key, name, hint }) =>
+        channels?.[key].linked ? (
+          <View key={key} style={{ gap: 8 }}>
+            <T style={{ fontFamily: fonts.bold }}>{`${name} مربوط`}</T>
+            <T style={{ color: c.muted, fontSize: 14 }}>{hint}</T>
+            <Button testID={`unlink-${key}`} kind="outline" label={`فك ربط ${name}`} onPress={() => void unlink(key)} />
+          </View>
+        ) : (
+          <View key={key} style={{ gap: 8 }}>
+            <Button testID={`link-${key}`} label={`ربط ${name}`} onPress={() => void link(key)} />
+            <T style={{ color: c.muted, fontSize: 14 }}>{`يفتح ${name} لتربط حسابك، ثم أرسل العروض للبوت وتصل هنا.`}</T>
+          </View>
+        ),
+      )}
       <Button testID="sign-out" kind="outline" label="تسجيل الخروج" onPress={() => void signOut()} disabled={busy} />
       <Button
         testID="privacy"
@@ -58,3 +107,8 @@ export default function Account() {
     </ScrollView>
   );
 }
+
+const CHANNELS: { key: ChannelName; name: string; hint: string }[] = [
+  { key: 'telegram', name: 'تيليجرام', hint: 'أرسل العروض لبوت تيليجرام وتُحفظ في حسابك.' },
+  { key: 'whatsapp', name: 'واتساب', hint: 'أرسل العروض لرقم واتساب AQRGO وتُحفظ في حسابك.' },
+];

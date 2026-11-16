@@ -56,6 +56,7 @@ function row(id: number, extra: Record<string, string> = {}) {
 
 let requests: Req[] = [];
 let rows: ReturnType<typeof row>[] = [];
+let telegramLinked = false;
 
 function reply(status: number, body?: unknown) {
   return Promise.resolve({
@@ -70,6 +71,7 @@ beforeEach(() => {
   secure.clear();
   requests = [];
   rows = [row(1)];
+  telegramLinked = false;
   global.fetch = jest.fn((url: string, init: RequestInit) => {
     const u = new URL(url);
     const req: Req = {
@@ -82,7 +84,7 @@ beforeEach(() => {
     const signedIn = req.auth === 'Bearer tok';
     if (req.path === '/api/v1/auth/code') return reply(204);
     if (req.path === '/api/v1/auth/verify') {
-      return req.body.code === '123456'
+      return ['123456', '123456789012'].includes(req.body.code)
         ? reply(200, { token: 'tok', user: { id: 1, email: req.body.email, name: 'nasser' } })
         : reply(401, { error: 'الرمز غير صحيح أو منتهي' });
     }
@@ -112,6 +114,19 @@ beforeEach(() => {
           ? [{ offer_type: 'أرض للبيع', location: 'حي الياسمين', plan_no: '3011', listed_on: null }]
           : [],
       });
+    }
+    if (req.path === '/api/v1/channels') {
+      return reply(200, {
+        telegram: { available: true, linked: telegramLinked },
+        whatsapp: { available: false, linked: false },
+      });
+    }
+    if (req.path === '/api/v1/channels/telegram/link') {
+      return reply(200, { url: 'https://t.me/aqrgo_crm_bot?start=abc' });
+    }
+    if (req.path === '/api/v1/channels/telegram' && req.method === 'DELETE') {
+      telegramLinked = false;
+      return reply(204);
     }
     if (req.path === '/api/v1/me' && req.method === 'DELETE') {
       rows = [];
@@ -245,4 +260,42 @@ it('deletes the account after confirming, and goes back to sign-in', async () =>
   expect(requests.some((r) => r.method === 'DELETE' && r.path === '/api/v1/me')).toBe(true);
   expect(secure.has('aqrgo.token')).toBe(false);
   alert.mockRestore();
+});
+
+it('links Telegram from the account screen by opening the bot', async () => {
+  secure.set('aqrgo.token', 'tok');
+  secure.set('aqrgo.user', JSON.stringify({ id: 1, email: 'n@x.com', name: 'n' }));
+  const open = jest
+    .spyOn(require('react-native').Linking, 'openURL')
+    .mockImplementation(async () => true);
+
+  await renderRouter('./src/app', { initialUrl: '/account' });
+  await fireEvent.press(await screen.findByTestId('link-telegram'));
+  await waitFor(() => expect(open).toHaveBeenCalledWith('https://t.me/aqrgo_crm_bot?start=abc'));
+  // WhatsApp isn't running on this server, so it isn't offered.
+  expect(screen.queryByTestId('link-whatsapp')).toBeNull();
+  open.mockRestore();
+});
+
+it('shows a linked Telegram and can unlink it', async () => {
+  secure.set('aqrgo.token', 'tok');
+  secure.set('aqrgo.user', JSON.stringify({ id: 1, email: 'n@x.com', name: 'n' }));
+  telegramLinked = true;
+
+  await renderRouter('./src/app', { initialUrl: '/account' });
+  expect(await screen.findByText('تيليجرام مربوط')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('unlink-telegram'));
+  expect(await screen.findByTestId('link-telegram')).toBeTruthy();
+  expect(requests.some((r) => r.method === 'DELETE' && r.path === '/api/v1/channels/telegram')).toBe(true);
+});
+
+it("accepts App Review's longer demo code", async () => {
+  await renderRouter('./src/app', { initialUrl: '/' });
+  await fireEvent.changeText(await screen.findByTestId('email'), 'review@aqrgo.com');
+  await fireEvent.press(screen.getByTestId('send-code'));
+  await fireEvent.changeText(await screen.findByTestId('code'), '123456789012');
+  expect(screen.getByTestId('code').props.maxLength).toBeGreaterThanOrEqual(12);
+  await fireEvent.press(screen.getByTestId('verify'));
+  await waitFor(() => expect(secure.get('aqrgo.token')).toBe('tok'));
+  expect(requests.find((r) => r.path === '/api/v1/auth/verify')?.body.code).toBe('123456789012');
 });
