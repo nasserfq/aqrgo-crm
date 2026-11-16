@@ -78,6 +78,15 @@ fn valid_token(t: &str) -> bool {
 }
 
 impl PushService {
+    /// Forgets every phone of a user (their account is being deleted).
+    pub async fn forget_owner(&self, owner: i64) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM push.devices WHERE owner_id = $1")
+            .bind(owner)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub fn new(pool: PgPool, jobs: jobs::Jobs) -> Self {
         Self { pool, jobs }
     }

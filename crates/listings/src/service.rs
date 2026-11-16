@@ -36,6 +36,15 @@ pub struct ListingsService {
 }
 
 impl ListingsService {
+    /// Deletes every row a user owns (their account is being deleted).
+    pub async fn forget_owner(&self, owner: i64) -> Result<(), ListingsError> {
+        sqlx::query("DELETE FROM listings.listings WHERE owner_id = $1")
+            .bind(owner)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool,

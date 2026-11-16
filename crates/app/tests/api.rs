@@ -541,3 +541,45 @@ async fn the_app_signs_in_with_apple() {
     let (status, _) = call(&app, Method::GET, "/api/v1/me", Some(token), None).await;
     assert_eq!(status, StatusCode::OK);
 }
+
+#[tokio::test]
+async fn deleting_the_account_removes_it_and_its_rows() {
+    let (app, inbox) = app().await;
+    let me = sign_in(&app, &inbox, "nasser@example.com").await;
+    let other = sign_in(&app, &inbox, "other@example.com").await;
+    for token in [&me, &other] {
+        let (status, _) = call(
+            &app,
+            Method::POST,
+            "/api/v1/listings",
+            Some(token),
+            Some(json!({ "offer_type": "أرض للبيع", "location": "حي الملقا" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CREATED);
+    }
+    call(
+        &app,
+        Method::POST,
+        "/api/v1/push/devices",
+        Some(&me),
+        Some(json!({ "token": "ExponentPushToken[abc]", "platform": "ios" })),
+    )
+    .await;
+
+    let (status, _) = call(&app, Method::DELETE, "/api/v1/me", None, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, _) = call(&app, Method::DELETE, "/api/v1/me", Some(&me), None).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    // Signed out everywhere; signing in again starts an empty account.
+    let (status, _) = call(&app, Method::GET, "/api/v1/me", Some(&me), None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let again = sign_in(&app, &inbox, "nasser@example.com").await;
+    let (_, list) = call(&app, Method::GET, "/api/v1/listings", Some(&again), None).await;
+    assert_eq!(list["listings"].as_array().unwrap().len(), 0);
+
+    // Other people's rows are untouched.
+    let (_, theirs) = call(&app, Method::GET, "/api/v1/listings", Some(&other), None).await;
+    assert_eq!(theirs["listings"].as_array().unwrap().len(), 1);
+}

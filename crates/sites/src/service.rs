@@ -25,6 +25,19 @@ pub struct SitesService {
 }
 
 impl SitesService {
+    /// Deletes a user's site and its settings (their account is being deleted).
+    pub async fn forget_owner(&self, owner: i64) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM sites.hidden_listings WHERE owner_id = $1")
+            .bind(owner)
+            .execute(&self.pool)
+            .await?;
+        sqlx::query("DELETE FROM sites.sites WHERE owner_id = $1")
+            .bind(owner)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     pub fn new(pool: PgPool, listings: ListingsService) -> Self {
         Self { pool, listings }
     }

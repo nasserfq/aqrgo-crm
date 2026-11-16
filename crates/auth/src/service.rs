@@ -375,6 +375,23 @@ impl AuthService {
         Ok(Some(user.into()))
     }
 
+    /// Deletes the account, its sessions and chat links. Other modules delete
+    /// their own data first (see the app's delete-account route).
+    pub async fn delete_user(&self, user_id: i64) -> Result<(), AuthError> {
+        let email: Option<String> =
+            sqlx::query_scalar("DELETE FROM auth.users WHERE id = $1 RETURNING email")
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        if let Some(email) = email {
+            sqlx::query("DELETE FROM auth.login_codes WHERE email = $1")
+                .bind(email)
+                .execute(&self.pool)
+                .await?;
+        }
+        Ok(())
+    }
+
     pub async fn sign_out(&self, token: &str) -> Result<(), AuthError> {
         sqlx::query("DELETE FROM auth.sessions WHERE token_hash = $1")
             .bind(sha256_hex(token))
