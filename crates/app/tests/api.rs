@@ -455,7 +455,8 @@ async fn the_app_signs_in_with_google_through_a_one_time_code() {
         Method::POST,
         "/api/v1/auth/google",
         None,
-        Some(json!({ "code": code, "verifier": verifier })),
+        // iOS can leave an empty fragment on the return URL; older app builds send it along.
+        Some(json!({ "code": format!("{code}#"), "verifier": verifier })),
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body}");

@@ -137,7 +137,10 @@ struct GoogleRequest {
 /// Finishes Google sign-in for the app: trades the one-time code from the
 /// `aqrgo://auth?code=…` redirect, plus the app's verifier, for a token.
 async fn google(State(state): State<AuthWeb>, Json(r): Json<GoogleRequest>) -> Response {
-    let redeemed = match state.handoff.redeem(&r.code, &r.verifier).await {
+    // iOS can hand the app the return URL with an empty fragment
+    // (`aqrgo://auth?code=…#`), and app builds 1.0.0 (9) and (10) keep the `#`.
+    let code = r.code.split('#').next().unwrap_or_default().trim();
+    let redeemed = match state.handoff.redeem(code, &r.verifier).await {
         Ok(t) => t,
         Err(e) => return auth_error(AuthError::Db(e)),
     };

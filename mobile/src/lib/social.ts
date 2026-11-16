@@ -37,7 +37,8 @@ export async function signInWithGoogle(api: Api, baseUrl: string): Promise<Signe
     { preferEphemeralSession: false },
   );
   if (result.type !== 'success') return null;
-  const query = result.url.split('?')[1] ?? '';
+  // iOS may add an empty fragment (aqrgo://auth?code=…#), so drop it first.
+  const query = result.url.split('#')[0].split('?')[1] ?? '';
   const params = new Map(
     query.split('&').map((kv) => {
       const [k, v = ''] = kv.split('=');
