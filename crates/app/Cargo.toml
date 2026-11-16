@@ -14,6 +14,7 @@ listings.workspace = true
 sites.workspace = true
 auth.workspace = true
 telegram.workspace = true
+whatsapp.workspace = true
 jobs.workspace = true
 mailer.workspace = true
 ai.workspace = true

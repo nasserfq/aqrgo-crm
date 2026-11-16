@@ -31,6 +31,7 @@ async fn app() -> (Router, Inbox) {
         public_url: "http://localhost".into(),
         google: None,
         telegram_bot: None,
+        whatsapp_number: None,
     };
     let modules = app::Modules::new(
         pool.clone(),
@@ -38,6 +39,7 @@ async fn app() -> (Router, Inbox) {
         Arc::new(inbox.clone()),
         auth::AuthConfig::default(),
         web,
+        None,
         None,
     );
     (app::router(&modules), inbox)

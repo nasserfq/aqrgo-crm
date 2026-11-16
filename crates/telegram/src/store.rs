@@ -1,5 +1,13 @@
+use auth::Channel;
 use listings::ListingInput;
 use sqlx::PgPool;
+
+fn channel_key(c: Channel) -> &'static str {
+    match c {
+        Channel::Telegram => "telegram",
+        Channel::WhatsApp => "whatsapp",
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct Store {
@@ -75,11 +83,16 @@ impl Store {
         Ok(row.map(|r| r.0 .0))
     }
 
-    pub async fn state(&self, chat_id: i64) -> Result<Option<ChatState>, sqlx::Error> {
+    pub async fn state(
+        &self,
+        channel: Channel,
+        chat_id: i64,
+    ) -> Result<Option<ChatState>, sqlx::Error> {
         let row: Option<(i64, String, String)> = sqlx::query_as(
             "SELECT draft_id, mode, field FROM telegram.chat_state
-             WHERE chat_id = $1 AND updated_at > now() - interval '1 day'",
+             WHERE channel = $1 AND chat_id = $2 AND updated_at > now() - interval '1 day'",
         )
+        .bind(channel_key(channel))
         .bind(chat_id)
         .fetch_optional(&self.pool)
         .await?;
@@ -96,15 +109,17 @@ impl Store {
 
     pub async fn set_state(
         &self,
+        channel: Channel,
         chat_id: i64,
         draft_id: i64,
         mode: Mode,
         field: &str,
     ) -> Result<(), sqlx::Error> {
         sqlx::query(
-            "INSERT INTO telegram.chat_state (chat_id, draft_id, mode, field) VALUES ($1, $2, $3, $4)
-             ON CONFLICT (chat_id) DO UPDATE SET draft_id = $2, mode = $3, field = $4, updated_at = now()",
+            "INSERT INTO telegram.chat_state (channel, chat_id, draft_id, mode, field) VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (channel, chat_id) DO UPDATE SET draft_id = $3, mode = $4, field = $5, updated_at = now()",
         )
+        .bind(channel_key(channel))
         .bind(chat_id)
         .bind(draft_id)
         .bind(if mode == Mode::Guided { "guided" } else { "edit" })
@@ -114,8 +129,9 @@ impl Store {
         Ok(())
     }
 
-    pub async fn clear_state(&self, chat_id: i64) -> Result<(), sqlx::Error> {
-        sqlx::query("DELETE FROM telegram.chat_state WHERE chat_id = $1")
+    pub async fn clear_state(&self, channel: Channel, chat_id: i64) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM telegram.chat_state WHERE channel = $1 AND chat_id = $2")
+            .bind(channel_key(channel))
             .bind(chat_id)
             .execute(&self.pool)
             .await?;

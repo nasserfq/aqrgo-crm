@@ -79,6 +79,7 @@ impl Status {
 pub enum Source {
     Web,
     Telegram,
+    WhatsApp,
 }
 
 impl Source {
@@ -86,6 +87,7 @@ impl Source {
         match self {
             Source::Web => "web",
             Source::Telegram => "telegram",
+            Source::WhatsApp => "whatsapp",
         }
     }
 }

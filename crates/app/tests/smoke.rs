@@ -30,6 +30,7 @@ async fn app() -> (Router, Inbox) {
         public_url: "http://localhost".into(),
         google: None,
         telegram_bot: Some("aqrgo_bot".into()),
+        whatsapp_number: Some("966500000000".into()),
     };
     let modules = app::Modules::new(
         pool.clone(),
@@ -38,6 +39,10 @@ async fn app() -> (Router, Inbox) {
         auth::AuthConfig::default(),
         web,
         Some("s".repeat(20)),
+        Some(whatsapp::webhook::HookConfig {
+            app_secret: "app-secret".into(),
+            verify_token: "verify-me".into(),
+        }),
     );
     (app::router(&modules), inbox)
 }
@@ -173,6 +178,30 @@ async fn telegram_webhook_rejects_wrong_secret() {
         .unwrap();
     let (status, _, _, _) = call(&app, req).await;
     assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn account_page_offers_a_whatsapp_link_that_prefills_the_link_message() {
+    let (app, inbox) = app().await;
+    let me = sign_in(&app, &inbox, "nasser@example.com").await;
+    let (_, _, _, page) = call(&app, get("/account", Some(&me))).await;
+    assert!(page.contains("ربط واتساب"), "{page}");
+    let (_, _, _, page) = call(&app, form("/account/whatsapp", "", Some(&me))).await;
+    // "ربط " percent-encoded, then the one-time token.
+    assert!(
+        page.contains("https://wa.me/966500000000?text=%D8%B1%D8%A8%D8%B7%20"),
+        "{page}"
+    );
+}
+
+#[tokio::test]
+async fn whatsapp_webhook_is_mounted_and_checks_the_verify_token() {
+    let (app, _) = app().await;
+    let path = "/whatsapp/webhook?hub.mode=subscribe&hub.challenge=7&hub.verify_token=";
+    let (status, _, _, body) = call(&app, get(&format!("{path}verify-me"), None)).await;
+    assert_eq!((status, body.as_str()), (StatusCode::OK, "7"));
+    let (status, _, _, _) = call(&app, get(&format!("{path}nope"), None)).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
 }
 
 #[tokio::test]

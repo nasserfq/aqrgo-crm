@@ -164,6 +164,7 @@ impl ListingListener for PushService {
         let title = match source {
             Source::Web => return Ok(()),
             Source::Telegram => "عرض جديد من تيليجرام",
+            Source::WhatsApp => "عرض جديد من واتساب",
         };
         let body = [listing.offer_type.as_str(), listing.location.as_str()]
             .into_iter()
