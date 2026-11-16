@@ -105,6 +105,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   input: {
+    writingDirection: 'rtl',
     minHeight: 52,
     borderWidth: 1,
     borderRadius: radius,

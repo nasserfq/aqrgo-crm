@@ -16,6 +16,32 @@ pages, so each user only ever sees and changes their own rows.
 4. `POST /api/v1/auth/logout` (with the token) → `204`.
 
 `GET /api/v1/me` → the signed-in user. A missing or expired token gives `401`.
+`DELETE /api/v1/me` → `204`: deletes the account and everything it owns (rows,
+phones, site, drafts), module by module. App Store rules require this in the app.
+
+`GET /api/v1/auth/options` → `{"google": bool}`: which sign-in buttons to show.
+
+### Google (no extra Google key: it reuses the web's OAuth client)
+
+1. The app makes a random `verifier` and opens
+   `/auth/google?app=<hex sha256 of verifier>` in the system sign-in sheet.
+2. After Google, the server sends the sheet to `aqrgo://auth?code=<one-time code>`
+   (or `aqrgo://auth?error=google|not_allowed`). The code lives 2 minutes, once.
+3. `POST /api/v1/auth/google` `{"code", "verifier"}` → `{"token", "user"}`. A code
+   caught by another app is useless without the verifier (PKCE-style).
+
+### Apple
+
+`POST /api/v1/auth/apple` `{"identity_token", "name"}` → `{"token", "user"}`. The
+server checks Apple's signature (keys from appleid.apple.com, cached), issuer,
+audience `com.aqrgo.app` and expiry. Apple sends the name only on the first
+sign-in, from the device.
+
+### App Store review login
+
+With the secrets `APP_REVIEW_EMAIL` and `APP_REVIEW_CODE` (10+ digits) set, that
+one email signs in with that fixed code and gets no email. Give both to Apple in
+App Store Connect → App Review Information.
 
 ## Listings
 
@@ -27,6 +53,7 @@ pages, so each user only ever sees and changes their own rows.
 | `GET /api/v1/listings/{id}` | row, or `404` (also for another user's row). |
 | `PUT /api/v1/listings/{id}` | row. Replaces all fields: send the whole row. |
 | `DELETE /api/v1/listings/{id}` | `204`. |
+| `POST /api/v1/listings/extract` `{"text"}` | `{"listings": [draft, ...]}`: the Telegram bot's AI reads pasted text. Saves nothing; the app fills its form with a draft for review. `503` when the AI isn't set up, `422` for empty or over 4000 characters. |
 
 A row carries every stored field plus `number` (running number in Arabic-Indic
 digits), `status_label`, `date_hijri` and `date_gregorian`, ready to show.

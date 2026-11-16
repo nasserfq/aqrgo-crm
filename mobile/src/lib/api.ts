@@ -38,6 +38,9 @@ export type ListingInput = Partial<
   Omit<Listing, 'id' | 'ref_no' | 'number' | 'status_label' | 'date_hijri' | 'date_gregorian' | 'source'>
 >;
 
+/** A row the AI read from pasted text, not saved yet. */
+export type ListingDraft = Omit<ListingInput, 'listed_on'> & { listed_on?: string | null };
+
 export type Meta = {
   fields: { key: keyof ListingInput; label: string }[];
   offer_types: string[];
@@ -112,6 +115,18 @@ export function createApi(opts: Options) {
       request<{ token: string; user: User }>('POST', '/api/v1/auth/verify', { email, code }),
     logout: () => request<void>('POST', '/api/v1/auth/logout'),
     me: () => request<User>('GET', '/api/v1/me'),
+    /** Which sign-in buttons to show. */
+    authOptions: () => request<{ google: boolean }>('GET', '/api/v1/auth/options'),
+    /** Finishes Google sign-in: the one-time code from aqrgo://auth plus the app's verifier. */
+    googleSignIn: (code: string, verifier: string) =>
+      request<{ token: string; user: User }>('POST', '/api/v1/auth/google', { code, verifier }),
+    appleSignIn: (identityToken: string, name: string) =>
+      request<{ token: string; user: User }>('POST', '/api/v1/auth/apple', {
+        identity_token: identityToken,
+        name,
+      }),
+    /** Deletes the account and everything in it. */
+    deleteAccount: () => request<void>('DELETE', '/api/v1/me'),
 
     listListings: async (filter: { q?: string; status?: Status | '' }) => {
       const params: string[] = [];
@@ -123,6 +138,11 @@ export function createApi(opts: Options) {
       return r.listings;
     },
     meta: () => request<Meta>('GET', '/api/v1/listings/meta'),
+    /** Reads a pasted lead with the AI; returns drafts, saves nothing. */
+    extractListings: async (text: string) => {
+      const r = await request<{ listings: ListingDraft[] }>('POST', '/api/v1/listings/extract', { text });
+      return r.listings;
+    },
     getListing: (id: number) => request<Listing>('GET', `/api/v1/listings/${id}`),
     createListing: (input: ListingInput) => request<Listing>('POST', '/api/v1/listings', input),
     updateListing: (id: number, input: ListingInput) =>

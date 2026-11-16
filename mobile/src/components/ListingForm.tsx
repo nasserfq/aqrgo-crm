@@ -1,5 +1,5 @@
 // The add / edit form, grouped like the web form.
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
 
 import type { Listing, ListingInput, Status } from '../lib/api';
@@ -78,9 +78,11 @@ type Props = {
   busy?: boolean;
   onSave: (input: ListingInput) => void;
   onDelete?: () => void;
+  /** Shown above the form, e.g. the "paste a lead" box. */
+  header?: ReactNode;
 };
 
-export function ListingForm({ initial, dateHint, error, busy, onSave, onDelete }: Props) {
+export function ListingForm({ initial, dateHint, error, busy, onSave, onDelete, header }: Props) {
   const c = useColors();
   const [v, setV] = useState<ListingInput>(initial);
   const set = (k: keyof ListingInput, value: string) => setV((old) => ({ ...old, [k]: value }));
@@ -88,6 +90,7 @@ export function ListingForm({ initial, dateHint, error, busy, onSave, onDelete }
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, gap: 20, paddingBottom: 48 }}>
+        {header}
         {error ? <Note>{error}</Note> : null}
         {SECTIONS.map((s) => (
           <View key={s.title} style={{ gap: 14, backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: radius, padding: 16 }}>

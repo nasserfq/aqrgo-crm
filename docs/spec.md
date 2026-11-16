@@ -65,4 +65,5 @@ Agreed with Nasser on 2026-11-15: React Native with Expo, one codebase for iOS a
 - First version: the table (search, status filter), add / edit / delete, Arabic right to left, lavender design.
 - Push notifications are a must (Nasser): every new lead that arrives by Telegram (and WhatsApp) notifies the owner's phones; tapping opens the row.
 - Builds, signing and store uploads run on EAS (Expo's build service). Bundle id `com.aqrgo.app`.
-- Later: paste a lead for the AI to fill, Google sign-in in the app, offline use.
+- In the app: email code, Google (via the web's OAuth client and a one-time code handed back to `aqrgo://auth`) and Sign in with Apple (required next to Google); paste a lead for the AI to fill the form; delete the account (App Store rule). Privacy policy at `/privacy`.
+- Later: offline use.

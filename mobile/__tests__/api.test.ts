@@ -120,3 +120,41 @@ describe('api client', () => {
     expect(err.message).toBe('تعذر الاتصال بالخادم، تحقق من الإنترنت');
   });
 });
+
+describe('api client: sign-in options, account and AI', () => {
+  it('finishes Google and Apple sign-in and deletes the account', async () => {
+    const session = { token: 't', user: { id: 1, email: 'n@x.com', name: 'n' } };
+    const { fn, calls } = fakeFetch([
+      { status: 200, body: { google: true } },
+      { status: 200, body: session },
+      { status: 200, body: session },
+      { status: 204 },
+    ]);
+    const api = createApi({ baseUrl: 'https://aqrgo.com', getToken: () => 'abc', fetch: fn });
+
+    expect((await api.authOptions()).google).toBe(true);
+    expect((await api.googleSignIn('c0de', 'v3rifier')).token).toBe('t');
+    expect((await api.appleSignIn('jwt', 'ناصر')).user.email).toBe('n@x.com');
+    await api.deleteAccount();
+
+    expect(calls.map((c) => [c.init.method, c.url])).toEqual([
+      ['GET', 'https://aqrgo.com/api/v1/auth/options'],
+      ['POST', 'https://aqrgo.com/api/v1/auth/google'],
+      ['POST', 'https://aqrgo.com/api/v1/auth/apple'],
+      ['DELETE', 'https://aqrgo.com/api/v1/me'],
+    ]);
+    expect(JSON.parse(calls[1].init.body as string)).toEqual({ code: 'c0de', verifier: 'v3rifier' });
+    expect(JSON.parse(calls[2].init.body as string)).toEqual({ identity_token: 'jwt', name: 'ناصر' });
+  });
+
+  it('sends pasted text to the AI and returns the drafts', async () => {
+    const { fn, calls } = fakeFetch([
+      { status: 200, body: { listings: [{ offer_type: 'أرض للبيع', location: 'حي الملقا' }] } },
+    ]);
+    const api = createApi({ baseUrl: 'https://aqrgo.com', getToken: () => 'abc', fetch: fn });
+    const drafts = await api.extractListings('للبيع أرض في الملقا');
+    expect(drafts[0].offer_type).toBe('أرض للبيع');
+    expect(calls[0].url).toBe('https://aqrgo.com/api/v1/listings/extract');
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ text: 'للبيع أرض في الملقا' });
+  });
+});
