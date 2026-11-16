@@ -140,3 +140,96 @@ fn missing_answer_is_an_error_not_a_no() {
     let res = json!({"answers": {"is_lead": {"type": "noul", "noul": 0.9}}});
     assert!(parse_answers(&res).is_err());
 }
+
+// Bedrock copying "أرض … العارض" as "أرد … العارد".
+const SLIPPED: &str = "أرض للبيع في حي العارض مخطط 2456";
+
+struct MiscopyingBedrock;
+
+#[async_trait::async_trait]
+impl LeadExtractor for MiscopyingBedrock {
+    async fn extract(&self, _text: &str, _today: NaiveDate) -> Result<Vec<ListingInput>, String> {
+        Ok(vec![ListingInput {
+            offer_type: "أرد للبيع".into(),
+            location: "حي العارد".into(),
+            plan_no: "2456".into(),
+            ..Default::default()
+        }])
+    }
+}
+
+struct SlipJudge(Result<Vec<f64>, String>);
+
+#[async_trait::async_trait]
+impl Judge for SlipJudge {
+    async fn judge(&self, _text: &str) -> Result<Judgments, String> {
+        Ok(j(0.95, 0.0, Status::Available))
+    }
+
+    async fn confirm_slips(
+        &self,
+        _text: &str,
+        _s: &[ai::faithful::Suspect],
+    ) -> Result<Vec<f64>, String> {
+        self.0.clone()
+    }
+}
+
+async fn slip_run(answers: Result<Vec<f64>, String>) -> ListingInput {
+    let x = JudgedExtractor::new(Arc::new(MiscopyingBedrock), Arc::new(SlipJudge(answers)));
+    x.extract(SLIPPED, today()).await.unwrap().remove(0)
+}
+
+#[tokio::test]
+async fn words_jev_confirms_as_slips_get_the_agents_spelling_back() {
+    let row = slip_run(Ok(vec![0.9, 0.8])).await;
+    assert_eq!(row.offer_type, "أرض للبيع");
+    assert_eq!(row.location, "حي العارض");
+}
+
+#[tokio::test]
+async fn words_jev_says_are_intended_are_kept() {
+    let row = slip_run(Ok(vec![0.9, 0.2])).await;
+    assert_eq!(row.offer_type, "أرض للبيع");
+    assert_eq!(row.location, "حي العارد");
+}
+
+#[tokio::test]
+async fn without_jev_every_slip_is_repaired() {
+    let row = slip_run(Err("timeout".into())).await;
+    assert_eq!(row.offer_type, "أرض للبيع");
+    assert_eq!(row.location, "حي العارض");
+}
+
+#[tokio::test]
+async fn the_guard_without_jev_repairs_slips_too() {
+    let x = ai::faithful::SpellingGuard::new(Arc::new(MiscopyingBedrock));
+    let row = x.extract(SLIPPED, today()).await.unwrap().remove(0);
+    assert_eq!(row.offer_type, "أرض للبيع");
+    assert_eq!(row.location, "حي العارض");
+}
+
+#[test]
+fn slip_request_asks_one_question_per_suspect() {
+    let suspects = ai::faithful::find_suspects(
+        SLIPPED,
+        &[ListingInput {
+            offer_type: "أرد للبيع".into(),
+            location: "حي العارد".into(),
+            ..Default::default()
+        }],
+    );
+    let body = ai::jev::slips_request_body("jev-1.14.0", SLIPPED, &suspects);
+    assert_eq!(body["state"]["message"], SLIPPED);
+    assert_eq!(body["state"]["written_1"], "العارد");
+    assert_eq!(body["state"]["original_1"], "العارض");
+    assert_eq!(body["questions"]["slip_0"]["type"], "noul");
+    assert_eq!(body["questions"].as_object().unwrap().len(), 2);
+}
+
+#[test]
+fn parses_slip_answers_and_refuses_missing_ones() {
+    let res = json!({"answers": {"slip_0": {"type": "noul", "noul": 0.9}, "slip_1": {"type": "noul", "noul": 0.1}}});
+    assert_eq!(ai::jev::parse_slips(&res, 2).unwrap(), vec![0.9, 0.1]);
+    assert!(ai::jev::parse_slips(&res, 3).is_err());
+}

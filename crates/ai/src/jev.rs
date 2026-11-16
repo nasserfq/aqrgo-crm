@@ -9,7 +9,10 @@ use chrono::NaiveDate;
 use listings::{ListingInput, Status};
 use serde_json::{json, Value};
 
-use crate::LeadExtractor;
+use crate::{
+    faithful::{self, Suspect},
+    LeadExtractor,
+};
 
 /// Pinned so thresholds stay meaningful when the `jev-latest` alias moves.
 pub const DEFAULT_MODEL: &str = "jev-1.14.0";
@@ -19,6 +22,8 @@ const API_URL: &str = "https://api.typesafe.ai/v1/systemone";
 const NOT_A_LEAD_BELOW: f64 = 0.3;
 /// Above this, the message is treated as stating the property's status.
 const STATUS_STATED_ABOVE: f64 = 0.7;
+/// At or above this, a suspect word is a copying slip and is repaired.
+const SLIP_AT_OR_ABOVE: f64 = 0.5;
 
 /// Jev's answers about one message.
 #[derive(Clone, Debug, PartialEq)]
@@ -34,6 +39,13 @@ pub struct Judgments {
 #[async_trait::async_trait]
 pub trait Judge: Send + Sync {
     async fn judge(&self, text: &str) -> Result<Judgments, String>;
+
+    /// For each suspect, the probability that Bedrock miscopied the
+    /// message's word (see [`faithful`]). Same order as `suspects`.
+    async fn confirm_slips(&self, text: &str, suspects: &[Suspect]) -> Result<Vec<f64>, String> {
+        let _ = (text, suspects);
+        Err("this judge does not check spelling".into())
+    }
 }
 
 /// The request sent to `POST /v1/systemone`.
@@ -79,6 +91,43 @@ pub fn request_body(model: &str, text: &str) -> Value {
     })
 }
 
+/// The request asking whether each suspect word is a copying slip.
+pub fn slips_request_body(model: &str, text: &str, suspects: &[Suspect]) -> Value {
+    let mut state = serde_json::Map::new();
+    state.insert("message".into(), json!(text));
+    state.insert(
+        "context".into(),
+        json!("An AI copied details of a property listing out of `message` (usually Gulf Arabic). \
+               Each `written_N` is a word the AI wrote; `original_N` is the closest word in `message`."),
+    );
+    let mut questions = serde_json::Map::new();
+    for (i, s) in suspects.iter().enumerate() {
+        state.insert(format!("written_{i}"), json!(s.written));
+        state.insert(format!("original_{i}"), json!(s.original));
+        questions.insert(
+            format!("slip_{i}"),
+            json!({
+                "type": "noul",
+                "instructions": format!("Is `written_{i}` the word `original_{i}` from `message`, copied with a wrong letter?"),
+                "criteria": {
+                    "true": format!("`written_{i}` is `original_{i}` with one letter changed, added or dropped by mistake, \
+                                     for example أرد written for أرض, or العارد for the district العارض."),
+                    "false": format!("`written_{i}` is a different, correctly spelled word that the AI chose on purpose, \
+                                      not a miscopy of `original_{i}`.")
+                }
+            }),
+        );
+    }
+    json!({ "model": model, "state": state, "questions": questions })
+}
+
+/// Reads one probability per suspect. A missing answer is an error.
+pub fn parse_slips(res: &Value, count: usize) -> Result<Vec<f64>, String> {
+    (0..count)
+        .map(|i| noul(res, &format!("slip_{i}")))
+        .collect()
+}
+
 fn noul(res: &Value, key: &str) -> Result<f64, String> {
     res.pointer(&format!("/answers/{key}/noul"))
         .and_then(Value::as_f64)
@@ -120,14 +169,13 @@ impl JevClient {
     }
 }
 
-#[async_trait::async_trait]
-impl Judge for JevClient {
-    async fn judge(&self, text: &str) -> Result<Judgments, String> {
+impl JevClient {
+    async fn ask(&self, body: &Value) -> Result<Value, String> {
         let res = self
             .http
             .post(API_URL)
             .bearer_auth(&self.api_key)
-            .json(&request_body(&self.model, text))
+            .json(body)
             .send()
             .await
             .map_err(|e| format!("Jev request failed: {e}"))?;
@@ -139,12 +187,26 @@ impl Judge for JevClient {
         if !status.is_success() {
             return Err(format!("Jev returned {status}: {}", body["detail"]));
         }
-        parse_answers(&body)
+        Ok(body)
     }
 }
 
-/// Bedrock fills in the columns; Jev's judgments decide whether to bother
-/// and fill in الحالة. If Jev fails, Bedrock runs on its own.
+#[async_trait::async_trait]
+impl Judge for JevClient {
+    async fn judge(&self, text: &str) -> Result<Judgments, String> {
+        parse_answers(&self.ask(&request_body(&self.model, text)).await?)
+    }
+
+    async fn confirm_slips(&self, text: &str, suspects: &[Suspect]) -> Result<Vec<f64>, String> {
+        let body = slips_request_body(&self.model, text, suspects);
+        parse_slips(&self.ask(&body).await?, suspects.len())
+    }
+}
+
+/// Bedrock fills in the columns; Jev's judgments decide whether to bother,
+/// fill in الحالة, and confirm which miscopied words get the message's own
+/// word back. If Jev fails, Bedrock runs on its own and every suspect word
+/// is repaired, as [`faithful::SpellingGuard`] does.
 pub struct JudgedExtractor {
     inner: Arc<dyn LeadExtractor>,
     judge: Arc<dyn Judge>,
@@ -184,6 +246,31 @@ impl LeadExtractor for JudgedExtractor {
                 row.status = j.status;
             }
         }
+        let suspects = faithful::find_suspects(text, &rows);
+        if suspects.is_empty() {
+            return Ok(rows);
+        }
+        let fixes: Vec<&Suspect> = match self.judge.confirm_slips(text, &suspects).await {
+            Ok(p) if p.len() == suspects.len() => {
+                for (s, p) in suspects.iter().zip(&p) {
+                    tracing::info!(field = s.field, written = %s.written, original = %s.original, slip = p, "Jev spelling check");
+                }
+                suspects
+                    .iter()
+                    .zip(p)
+                    .filter(|(_, p)| *p >= SLIP_AT_OR_ABOVE)
+                    .map(|(s, _)| s)
+                    .collect()
+            }
+            other => {
+                if let Err(e) = other {
+                    tracing::warn!(error = %e, "Jev spelling check unavailable, repairing every suspect");
+                }
+                faithful::log(&suspects);
+                suspects.iter().collect()
+            }
+        };
+        faithful::repair(&mut rows, &fixes);
         Ok(rows)
     }
 }

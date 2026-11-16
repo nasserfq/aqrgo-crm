@@ -99,6 +99,7 @@ pub fn parse_tool_input(input: &Value, today: NaiveDate) -> Vec<ListingInput> {
         .collect()
 }
 
+pub mod faithful;
 pub mod jev;
 
 pub struct BedrockExtractor {
