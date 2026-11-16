@@ -423,3 +423,82 @@ async fn the_privacy_policy_is_public() {
     assert!(html.contains("nafa050@gmail.com"));
     assert!(html.contains("حذف الحساب"));
 }
+
+fn with_header(mut req: Request<Body>, name: &'static str, value: &str) -> Request<Body> {
+    req.headers_mut().insert(name, value.parse().unwrap());
+    req
+}
+
+#[tokio::test]
+async fn a_hostile_page_cannot_post_the_login_form_for_you() {
+    let (app, inbox) = app().await;
+    let (status, ..) = call(
+        &app,
+        form("/login/email", "email=attacker%40example.com", None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let code = inbox.0.lock().unwrap().clone().unwrap();
+    let body = format!("email=attacker%40example.com&code={code}");
+
+    // Modern browsers say where a form post came from.
+    let req = with_header(
+        form("/login/verify", &body, None),
+        "sec-fetch-site",
+        "cross-site",
+    );
+    let (status, cookie, ..) = call(&app, req).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(cookie.is_none(), "no session cookie for a cross-site post");
+
+    // Older ones only send Origin.
+    let req = with_header(
+        with_header(form("/login/verify", &body, None), "host", "localhost"),
+        "origin",
+        "https://evil.example",
+    );
+    assert_eq!(call(&app, req).await.0, StatusCode::FORBIDDEN);
+
+    // The real login page posting to itself still works.
+    let req = with_header(
+        with_header(
+            with_header(form("/login/verify", &body, None), "host", "localhost"),
+            "origin",
+            "http://localhost",
+        ),
+        "sec-fetch-site",
+        "same-origin",
+    );
+    let (status, cookie, ..) = call(&app, req).await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    assert!(cookie.is_some());
+}
+
+#[tokio::test]
+async fn signed_in_forms_and_logout_refuse_cross_site_posts() {
+    let (app, inbox) = app().await;
+    let session = sign_in(&app, &inbox, "agent@example.com").await;
+
+    for uri in ["/auth/logout", "/account/telegram", "/site"] {
+        let req = with_header(
+            form(uri, "", Some(&session)),
+            "sec-fetch-site",
+            "cross-site",
+        );
+        assert_eq!(call(&app, req).await.0, StatusCode::FORBIDDEN, "{uri}");
+    }
+    // Still signed in.
+    let (status, ..) = call(&app, get("/account", Some(&session))).await;
+    assert_eq!(status, StatusCode::OK);
+
+    // Telegram's webhook is a server-to-server post and is not affected.
+    let req = with_header(
+        Request::post("/telegram/webhook")
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from("{}"))
+            .unwrap(),
+        "origin",
+        "https://evil.example",
+    );
+    assert_ne!(call(&app, req).await.0, StatusCode::FORBIDDEN);
+}

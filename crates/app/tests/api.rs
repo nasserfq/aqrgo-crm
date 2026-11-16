@@ -737,13 +737,15 @@ async fn the_app_links_telegram_and_whatsapp() {
     let token = url
         .strip_prefix("https://t.me/aqrgo_crm_bot?start=")
         .expect(url);
-    modules
-        .auth_web
-        .service
-        .redeem_link(auth::Channel::Telegram, token, 42)
-        .await
-        .unwrap()
-        .expect("token links");
+    assert!(matches!(
+        modules
+            .auth_web
+            .service
+            .redeem_link(auth::Channel::Telegram, token, 42)
+            .await
+            .unwrap(),
+        auth::LinkOutcome::Linked(_)
+    ));
     let (_, channels) = call(&app, Method::GET, "/api/v1/channels", Some(&me), None).await;
     assert_eq!(channels["telegram"]["linked"], true);
 

@@ -551,3 +551,31 @@ async fn a_step_by_step_entry_on_telegram_does_not_leak_into_whatsapp() {
         w.out.last_text()
     );
 }
+
+#[tokio::test]
+async fn someone_elses_link_does_not_move_a_linked_chat() {
+    let w = world(None).await;
+    w.link().await;
+
+    let s = w
+        .auth
+        .sign_in_verified_email("attacker@example.com", "x")
+        .await
+        .unwrap();
+    let attacker = w.auth.user_for_session(&s).await.unwrap().unwrap();
+    let token = w.auth.create_link(attacker.id).await.unwrap();
+    w.say(&format!("/start {token}")).await;
+
+    let reply = w.out.last_text();
+    assert!(reply.contains("مربوطة بحساب آخر"), "{reply}");
+    assert!(!reply.contains("تم ربط"), "{reply}");
+    assert_eq!(
+        w.auth
+            .user_for(Channel::Telegram, TG_USER)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        w.owner
+    );
+}

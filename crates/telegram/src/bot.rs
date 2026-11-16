@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ai::LeadExtractor;
-use auth::{AuthService, Channel};
+use auth::{AuthService, Channel, LinkOutcome};
 use common::{dates, html_escape, CurrentUser};
 use listings::{
     ListingInput, ListingsService, Source, BUILDING_FIELDS, FIELDS, OFFER_TYPE_SUGGESTIONS,
@@ -266,14 +266,22 @@ impl Bot {
         let channel = out.channel();
         if let Some(token) = link_token(text) {
             return match self.auth.redeem_link(channel, token, from).await? {
-                Some(user) => {
+                LinkOutcome::Linked(user) => {
                     let msg = format!(
                         "تم ربط حسابك ✅ ({})\n\nأرسل أي عرض أو طلب كما تكتبه (أو أعد توجيه الرسالة) وسأرتبه في جدولك، ثم أعرضه عليك قبل الحفظ.",
                         html_escape(&user.email)
                     );
                     self.send(out, chat, &msg, menu()).await.map(|_| ())
                 }
-                None => {
+                LinkOutcome::LinkedElsewhere { email } => {
+                    let msg = format!(
+                        "هذه المحادثة مربوطة بحساب آخر ({}). لم نغيّر شيئاً.\n\nإن كان هذا حسابك وتريد نقلها، افصلها أولاً من ذلك الحساب: حسابي ← {}، ثم افتح الرابط مرة أخرى.",
+                        html_escape(&email),
+                        link_label(channel)
+                    );
+                    self.send(out, chat, &msg, Buttons::None).await.map(|_| ())
+                }
+                LinkOutcome::Invalid => {
                     let msg = format!(
                         "رابط الربط غير صالح أو منتهي. أنشئ رابطاً جديداً من الموقع: حسابي ← {}.",
                         link_label(channel)

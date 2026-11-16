@@ -29,7 +29,9 @@ fn auth_error(e: AuthError) -> Response {
     let status = match &e {
         AuthError::InvalidEmail => StatusCode::UNPROCESSABLE_ENTITY,
         AuthError::InvalidCode => StatusCode::UNAUTHORIZED,
-        AuthError::TooManyAttempts | AuthError::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
+        AuthError::TooManyAttempts | AuthError::TooManyRequests | AuthError::LockedForToday => {
+            StatusCode::TOO_MANY_REQUESTS
+        }
         AuthError::NotAllowed => StatusCode::FORBIDDEN,
         AuthError::Mail(_) | AuthError::Db(_) => {
             tracing::error!(error = %e, "api sign-in failed");
