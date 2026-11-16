@@ -41,6 +41,8 @@ pub struct Modules {
     pub jobs: jobs::Jobs,
     pub telegram_secret: Option<String>,
     pub whatsapp: Option<whatsapp::webhook::HookConfig>,
+    /// Reads pasted leads for the app's "paste a lead" box (None without AWS).
+    pub extractor: Option<Arc<dyn ai::LeadExtractor>>,
     pool: PgPool,
 }
 
@@ -71,6 +73,7 @@ impl Modules {
             jobs,
             telegram_secret,
             whatsapp,
+            extractor: None,
             pool,
         }
     }
@@ -153,6 +156,47 @@ async fn delete_account(
     }
 }
 
+#[derive(serde::Deserialize)]
+struct ExtractRequest {
+    text: String,
+}
+
+/// The app's "paste a lead" box: the same AI as the Telegram bot reads the
+/// text and returns draft rows. Nothing is saved; the app fills its form with
+/// a draft and the person checks it before saving.
+async fn extract_listings(
+    axum::extract::State(m): axum::extract::State<Modules>,
+    axum::Json(r): axum::Json<ExtractRequest>,
+) -> axum::response::Response {
+    const MAX_CHARS: usize = 4000;
+    let text = r.text.trim();
+    if text.is_empty() {
+        return auth::api::error(StatusCode::UNPROCESSABLE_ENTITY, "الصق نص العرض أولاً");
+    }
+    if text.chars().count() > MAX_CHARS {
+        return auth::api::error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "النص طويل جداً، الصق عرضاً واحداً",
+        );
+    }
+    let Some(extractor) = &m.extractor else {
+        return auth::api::error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "القراءة الآلية غير متاحة الآن، عبّئ الخانات يدوياً",
+        );
+    };
+    match extractor.extract(text, common::dates::today_riyadh()).await {
+        Ok(drafts) => axum::Json(serde_json::json!({ "listings": drafts })).into_response(),
+        Err(e) => {
+            tracing::warn!(error = %e, "app lead extraction failed");
+            auth::api::error(
+                StatusCode::BAD_GATEWAY,
+                "تعذرت قراءة النص الآن، حاول مرة أخرى أو عبّئ الخانات يدوياً",
+            )
+        }
+    }
+}
+
 /// The full HTTP app.
 pub fn router(m: &Modules) -> Router {
     let protected = listings::web::router(m.listings.clone())
@@ -170,6 +214,10 @@ pub fn router(m: &Modules) -> Router {
         .merge(
             Router::new()
                 .route("/api/v1/me", axum::routing::delete(delete_account))
+                .route(
+                    "/api/v1/listings/extract",
+                    axum::routing::post(extract_listings),
+                )
                 .with_state(m.clone()),
         )
         .layer(middleware::from_fn_with_state(

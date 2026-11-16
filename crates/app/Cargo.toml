@@ -9,6 +9,8 @@ name = "aqrgo-crm"
 path = "src/main.rs"
 
 [dependencies]
+serde.workspace = true
+serde_json.workspace = true
 common.workspace = true
 listings.workspace = true
 sites.workspace = true
@@ -33,6 +35,7 @@ aws-sdk-bedrockruntime.workspace = true
 sentry.workspace = true
 
 [dev-dependencies]
+chrono.workspace = true
 testkit.workspace = true
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"

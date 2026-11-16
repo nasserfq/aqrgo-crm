@@ -583,3 +583,90 @@ async fn deleting_the_account_removes_it_and_its_rows() {
     let (_, theirs) = call(&app, Method::GET, "/api/v1/listings", Some(&other), None).await;
     assert_eq!(theirs["listings"].as_array().unwrap().len(), 1);
 }
+
+struct FakeExtractor;
+
+#[async_trait::async_trait]
+impl ai::LeadExtractor for FakeExtractor {
+    async fn extract(
+        &self,
+        text: &str,
+        _today: chrono::NaiveDate,
+    ) -> Result<Vec<listings::ListingInput>, String> {
+        if text.contains("للبيع") {
+            Ok(vec![listings::ListingInput {
+                offer_type: "أرض للبيع".into(),
+                location: "حي الملقا".into(),
+                ..Default::default()
+            }])
+        } else {
+            Ok(vec![])
+        }
+    }
+}
+
+#[tokio::test]
+async fn the_app_pastes_a_lead_and_gets_draft_rows() {
+    let (_, mut modules) = app_with_google().await;
+    let app = app::router(&modules);
+    let me = {
+        let session = modules
+            .auth_web
+            .service
+            .sign_in_verified_email("nasser@example.com", "Nasser")
+            .await
+            .unwrap();
+        session
+    };
+    let paste = json!({ "text": "للبيع أرض في حي الملقا" });
+
+    let (status, _) = call(
+        &app,
+        Method::POST,
+        "/api/v1/listings/extract",
+        None,
+        Some(paste.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    // Without the AI set up, the app is told to fill the form by hand.
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/listings/extract",
+        Some(&me),
+        Some(paste.clone()),
+    )
+    .await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert!(body["error"].as_str().unwrap().contains("يدوياً"));
+
+    modules.extractor = Some(Arc::new(FakeExtractor));
+    let app = app::router(&modules);
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/listings/extract",
+        Some(&me),
+        Some(paste),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["listings"][0]["offer_type"], "أرض للبيع");
+    assert_eq!(body["listings"][0]["location"], "حي الملقا");
+
+    // Nothing is saved until the person saves the form.
+    let (_, list) = call(&app, Method::GET, "/api/v1/listings", Some(&me), None).await;
+    assert_eq!(list["listings"].as_array().unwrap().len(), 0);
+
+    let (status, _) = call(
+        &app,
+        Method::POST,
+        "/api/v1/listings/extract",
+        Some(&me),
+        Some(json!({ "text": "  " })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}

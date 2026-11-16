@@ -102,7 +102,7 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
         telegram_bot: bot_username,
         whatsapp_number,
     };
-    let modules = Modules::new(
+    let mut modules = Modules::new(
         pool.clone(),
         jobs.clone(),
         code_mailer,
@@ -134,30 +134,31 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
         modules.push.clone(),
         Arc::new(push::ExpoSender::new(cfg.expo_access_token.clone())),
     );
-    if tg_api.is_some() || wa_api.is_some() {
-        let extractor: Option<Arc<dyn ai::LeadExtractor>> = aws.as_ref().map(|a| {
-            let model = cfg
-                .bedrock_model_id
-                .clone()
-                .unwrap_or_else(|| "amazon.nova-pro-v1:0".into());
-            tracing::info!(%model, "AI lead reading via Amazon Bedrock");
-            let bedrock: Arc<dyn ai::LeadExtractor> = Arc::new(ai::BedrockExtractor::new(
-                aws_sdk_bedrockruntime::Client::new(a),
-                model,
-            ));
-            match cfg.typesafe_api_key.clone() {
-                Some(key) => {
-                    let jev_model = cfg
-                        .typesafe_model
-                        .clone()
-                        .unwrap_or_else(|| ai::jev::DEFAULT_MODEL.into());
-                    tracing::info!(model = %jev_model, "Jev judgments on incoming leads");
-                    let judge = Arc::new(ai::jev::JevClient::new(key, jev_model));
-                    Arc::new(ai::jev::JudgedExtractor::new(bedrock, judge)) as _
-                }
-                None => bedrock,
+    let extractor: Option<Arc<dyn ai::LeadExtractor>> = aws.as_ref().map(|a| {
+        let model = cfg
+            .bedrock_model_id
+            .clone()
+            .unwrap_or_else(|| "amazon.nova-pro-v1:0".into());
+        tracing::info!(%model, "AI lead reading via Amazon Bedrock");
+        let bedrock: Arc<dyn ai::LeadExtractor> = Arc::new(ai::BedrockExtractor::new(
+            aws_sdk_bedrockruntime::Client::new(a),
+            model,
+        ));
+        match cfg.typesafe_api_key.clone() {
+            Some(key) => {
+                let jev_model = cfg
+                    .typesafe_model
+                    .clone()
+                    .unwrap_or_else(|| ai::jev::DEFAULT_MODEL.into());
+                tracing::info!(model = %jev_model, "Jev judgments on incoming leads");
+                let judge = Arc::new(ai::jev::JevClient::new(key, jev_model));
+                Arc::new(ai::jev::JudgedExtractor::new(bedrock, judge)) as _
             }
-        });
+            None => bedrock,
+        }
+    });
+    modules.extractor = extractor.clone();
+    if tg_api.is_some() || wa_api.is_some() {
         let auth_service = modules.auth_web.service.clone();
         let bot = telegram::Bot::new(
             pool.clone(),
