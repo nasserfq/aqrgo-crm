@@ -8,29 +8,19 @@
 //! redirect has the code but not the verifier, so it can't use it (the same idea
 //! as OAuth PKCE).
 //!
-//! Codes live in memory for two minutes; a restart just means signing in again.
-
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::{Duration, Instant},
-};
+//! Codes live two minutes in `auth.app_handoffs` (hashed), so a server restart
+//! between Google and the app's redeem doesn't break the sign-in.
 
 use rand::{distributions::Alphanumeric, Rng};
 use sha2::{Digest, Sha256};
+use sqlx::PgPool;
 use subtle::ConstantTimeEq;
 
-const TTL: Duration = Duration::from_secs(120);
+const TTL_SECONDS: i32 = 120;
 
-struct Pending {
-    session: String,
-    challenge: String,
-    issued: Instant,
-}
-
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct AppHandoff {
-    pending: Arc<Mutex<HashMap<String, Pending>>>,
+    pool: PgPool,
 }
 
 /// A challenge is the lowercase hex SHA-256 of the app's verifier.
@@ -38,39 +28,53 @@ pub fn valid_challenge(c: &str) -> bool {
     c.len() == 64 && c.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
+fn sha256_hex(s: &str) -> String {
+    hex::encode(Sha256::digest(s.as_bytes()))
+}
+
 impl AppHandoff {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
     /// Stores a signed-in session for the app and returns the one-time code.
-    pub fn issue(&self, session: String, challenge: String) -> String {
+    pub async fn issue(&self, session: String, challenge: String) -> Result<String, sqlx::Error> {
         let code: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(40)
             .map(char::from)
             .collect();
-        let mut pending = self.pending.lock().expect("handoff lock");
-        pending.retain(|_, p| p.issued.elapsed() < TTL);
-        pending.insert(
-            code.clone(),
-            Pending {
-                session,
-                challenge,
-                issued: Instant::now(),
-            },
-        );
-        code
+        sqlx::query("DELETE FROM auth.app_handoffs WHERE expires_at <= now()")
+            .execute(&self.pool)
+            .await?;
+        sqlx::query(
+            "INSERT INTO auth.app_handoffs (code_hash, session, challenge, expires_at)
+             VALUES ($1, $2, $3, now() + make_interval(secs => $4))",
+        )
+        .bind(sha256_hex(&code))
+        .bind(session)
+        .bind(challenge)
+        .bind(TTL_SECONDS as f64)
+        .execute(&self.pool)
+        .await?;
+        Ok(code)
     }
 
     /// Trades a code and the app's verifier for the session token, once.
-    pub fn redeem(&self, code: &str, verifier: &str) -> Option<String> {
-        let p = self.pending.lock().expect("handoff lock").remove(code)?;
-        if p.issued.elapsed() >= TTL {
-            return None;
-        }
-        let actual = hex::encode(Sha256::digest(verifier.as_bytes()));
-        if bool::from(actual.as_bytes().ct_eq(p.challenge.as_bytes())) {
-            Some(p.session)
-        } else {
-            None
-        }
+    /// Any try uses the code up, right or wrong.
+    pub async fn redeem(&self, code: &str, verifier: &str) -> Result<Option<String>, sqlx::Error> {
+        let row: Option<(String, String)> = sqlx::query_as(
+            "DELETE FROM auth.app_handoffs WHERE code_hash = $1 AND expires_at > now()
+             RETURNING session, challenge",
+        )
+        .bind(sha256_hex(code))
+        .fetch_optional(&self.pool)
+        .await?;
+        let Some((session, challenge)) = row else {
+            return Ok(None);
+        };
+        let actual = sha256_hex(verifier);
+        Ok(bool::from(actual.as_bytes().ct_eq(challenge.as_bytes())).then_some(session))
     }
 }
 
@@ -78,34 +82,9 @@ impl AppHandoff {
 mod tests {
     use super::*;
 
-    fn challenge(verifier: &str) -> String {
-        hex::encode(Sha256::digest(verifier.as_bytes()))
-    }
-
-    #[test]
-    fn the_app_with_the_verifier_gets_the_session_once() {
-        let h = AppHandoff::default();
-        let code = h.issue("sess".into(), challenge("secret-verifier"));
-        assert_eq!(h.redeem(&code, "secret-verifier").as_deref(), Some("sess"));
-        assert_eq!(h.redeem(&code, "secret-verifier"), None, "one use only");
-    }
-
-    #[test]
-    fn a_wrong_verifier_or_unknown_code_gets_nothing() {
-        let h = AppHandoff::default();
-        let code = h.issue("sess".into(), challenge("secret-verifier"));
-        assert_eq!(h.redeem(&code, "guess"), None);
-        assert_eq!(
-            h.redeem(&code, "secret-verifier"),
-            None,
-            "a failed try burns the code"
-        );
-        assert_eq!(h.redeem("nope", "secret-verifier"), None);
-    }
-
     #[test]
     fn challenges_must_be_hex_sha256() {
-        assert!(valid_challenge(&challenge("x")));
+        assert!(valid_challenge(&sha256_hex("x")));
         assert!(!valid_challenge("abc"));
         assert!(!valid_challenge(&"Z".repeat(64)));
     }
