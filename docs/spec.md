@@ -42,10 +42,20 @@ Agreed with Nasser on 2026-11-14.
 
 ## Architecture
 
-- Rust + Axum modular monolith (Cargo workspace). Modules: `listings`, `auth`, `telegram`, `ai`, `jobs`, `mailer`, `sites`, `common`, wired by `app`. Modules talk through public APIs and each owns its own Postgres schema and migrations.
-- Server-rendered pages (Askama + a little htmx).
+- Rust + Axum modular monolith (Cargo workspace). Modules: `listings`, `auth`, `telegram`, `ai`, `jobs`, `mailer`, `sites`, `push`, `common`, wired by `app`. Modules talk through public APIs and each owns its own Postgres schema and migrations.
+- Server-rendered pages (Askama + a little htmx), plus a JSON API under `/api/v1` with bearer tokens for the iOS and Android apps (see `docs/api.md`).
 - PostgreSQL, self-hosted next to the app (not Supabase), with daily backups.
 - Background jobs: Postgres-backed queue with retries.
 - No Redis for now (Postgres covers current needs).
 - Built and deployed by GitHub Actions (never compiled on the server): test, build Docker image to GHCR, SSH to the server, `docker compose up`. The server's shared kamal-proxy provides HTTPS for aqrgo.com and www.aqrgo.com.
 - Built test-first (TDD) at agreed seams.
+
+## Phone apps
+
+Agreed with Nasser on 2026-11-15: React Native with Expo, one codebase for iOS and Android, in `mobile/`.
+
+- Same account and rows as the web, through the JSON API (`docs/api.md`). Sign in with the emailed code; the token is kept in the phone's secure storage.
+- First version: the table (search, status filter), add / edit / delete, Arabic right to left, lavender design.
+- Push notifications are a must (Nasser): every new lead that arrives by Telegram (and WhatsApp) notifies the owner's phones; tapping opens the row.
+- Builds, signing and store uploads run on EAS (Expo's build service). Bundle id `com.aqrgo.app`.
+- Later: paste a lead for the AI to fill, Google sign-in in the app, offline use.

@@ -17,6 +17,7 @@ pub async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
         (listings::SCHEMA, &listings::MIGRATOR),
         (telegram::SCHEMA, &telegram::MIGRATOR),
         (sites::SCHEMA, &sites::MIGRATOR),
+        (push::SCHEMA, &push::MIGRATOR),
     ] {
         common::db::migrate_module(pool, schema, m).await?;
     }
@@ -27,6 +28,7 @@ pub struct Modules {
     pub auth_web: auth::web::AuthWeb,
     pub listings: listings::ListingsService,
     pub sites: sites::web::SitesWeb,
+    pub push: push::PushService,
     pub jobs: jobs::Jobs,
     pub telegram_secret: Option<String>,
 }
@@ -41,7 +43,10 @@ impl Modules {
         telegram_secret: Option<String>,
     ) -> Self {
         let auth = auth::AuthService::new(pool.clone(), code_mailer, auth_config);
-        let listings = listings::ListingsService::new(pool.clone());
+        let push = push::PushService::new(pool.clone(), jobs.clone());
+        // New rows that arrive by message notify the owner's phones.
+        let listings =
+            listings::ListingsService::new(pool.clone()).with_listener(Arc::new(push.clone()));
         let sites = sites::web::SitesWeb::new(
             sites::SitesService::new(pool.clone(), listings.clone()),
             &web_config.public_url,
@@ -50,6 +55,7 @@ impl Modules {
             auth_web: auth::web::AuthWeb::new(auth, web_config),
             listings,
             sites,
+            push,
             jobs,
             telegram_secret,
         }
@@ -102,6 +108,15 @@ pub fn router(m: &Modules) -> Router {
             auth::web::require_user,
         ));
 
+    // JSON API for the iOS and Android apps (bearer tokens, no cookies).
+    let api = listings::api::router(m.listings.clone())
+        .merge(push::api::router(m.push.clone()))
+        .merge(auth::api::account_router())
+        .layer(middleware::from_fn_with_state(
+            m.auth_web.clone(),
+            auth::api::require_token,
+        ));
+
     let mut app = Router::new()
         .route("/healthz", get(|| async { "ok" }))
         .route("/static/app.css", get(css))
@@ -120,7 +135,9 @@ pub fn router(m: &Modules) -> Router {
         )
         .merge(auth::web::public_router(m.auth_web.clone()))
         .merge(sites::web::public_router(m.sites.clone()))
-        .merge(protected);
+        .merge(protected)
+        .merge(auth::api::public_router(m.auth_web.clone()))
+        .merge(api);
 
     if let Some(secret) = &m.telegram_secret {
         app = app.merge(telegram::webhook::router(m.jobs.clone(), secret.clone()));

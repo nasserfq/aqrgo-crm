@@ -65,6 +65,8 @@ dependencies = [
  "jobs",
  "listings",
  "mailer",
+ "push",
+ "serde_json",
  "sites",
  "sqlx",
  "telegram",
@@ -2233,10 +2235,12 @@ name = "listings"
 version = "0.1.0"
 dependencies = [
  "askama",
+ "async-trait",
  "axum",
  "chrono",
  "common",
  "serde",
+ "serde_json",
  "sqlx",
  "testkit",
  "thiserror",
@@ -2671,6 +2675,25 @@ checksum = "4dcd034599e63b970727f70d79e02d62390a4a84f7c6b827c27c46d5ac3fa622"
 dependencies = [
  "ar_archive_writer",
  "cc",
+]
+
+[[package]]
+name = "push"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "common",
+ "jobs",
+ "listings",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "testkit",
+ "thiserror",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
