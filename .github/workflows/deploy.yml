@@ -96,7 +96,10 @@ jobs:
 
   build:
     needs: [test, e2e]
-    if: github.event_name != 'pull_request'
+    # Only main ever ships: a manual run from any other branch tests but
+    # doesn't build or deploy. (The GitHub `production` environment should
+    # also allow only main; see README "Deploy".)
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -125,6 +128,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
     permissions:

@@ -107,6 +107,44 @@ pub fn account_router(state: AuthWeb) -> Router {
         .with_state(state)
 }
 
+/// Middleware for cookie-signed-in forms: refuses a POST (or any non-read
+/// request) that a browser says came from another site, so a hostile page
+/// can't sign you in as someone else, sign you out, or submit your forms.
+/// Browsers send `Sec-Fetch-Site`; older ones only `Origin`, which must then
+/// match the `Host` the request was sent to. Requests with neither (servers,
+/// scripts) are let through: they carry no victim's cookies.
+pub async fn reject_cross_site(req: Request, next: Next) -> Response {
+    if is_cross_site(&req) {
+        tracing::warn!(path = %req.uri().path(), "refused a cross-site form post");
+        return (StatusCode::FORBIDDEN, "طلب مرفوض").into_response();
+    }
+    next.run(req).await
+}
+
+fn is_cross_site(req: &Request) -> bool {
+    if req.method().is_safe() {
+        return false;
+    }
+    let headers = req.headers();
+    if let Some(site) = headers.get("sec-fetch-site") {
+        // `none` is a user typing the address or using a bookmark.
+        return !matches!(site.as_bytes(), b"same-origin" | b"none");
+    }
+    let Some(origin) = headers.get(header::ORIGIN) else {
+        return false;
+    };
+    let origin_host = origin
+        .to_str()
+        .ok()
+        .and_then(|o| o.split_once("://"))
+        .map(|(_, host)| host.trim_end_matches('/'));
+    let host = headers.get(header::HOST).and_then(|h| h.to_str().ok());
+    match (origin_host, host) {
+        (Some(o), Some(h)) => !o.eq_ignore_ascii_case(h),
+        _ => true,
+    }
+}
+
 /// Middleware: loads the user from the session cookie or sends them to /login.
 pub async fn require_user(
     State(state): State<AuthWeb>,
@@ -261,7 +299,7 @@ async fn verify_code(
             if let AuthError::Db(_) = &e {
                 tracing::error!(error = %e, "verify_code failed");
             }
-            let step = if matches!(e, AuthError::TooManyAttempts) {
+            let step = if matches!(e, AuthError::TooManyAttempts | AuthError::LockedForToday) {
                 Step::Email
             } else {
                 Step::Code

@@ -205,7 +205,8 @@ pub fn router(m: &Modules) -> Router {
         .layer(middleware::from_fn_with_state(
             m.auth_web.clone(),
             auth::web::require_user,
-        ));
+        ))
+        .layer(middleware::from_fn(auth::web::reject_cross_site));
 
     // JSON API for the iOS and Android apps (bearer tokens, no cookies).
     let api = listings::api::router(m.listings.clone())
@@ -241,7 +242,11 @@ pub fn router(m: &Modules) -> Router {
             "/static/logo.png",
             get(|| async { asset("image/png", LOGO_PNG) }),
         )
-        .merge(auth::web::public_router(m.auth_web.clone()))
+        // Cookie-based forms refuse cross-site posts (login CSRF and the like).
+        .merge(
+            auth::web::public_router(m.auth_web.clone())
+                .layer(middleware::from_fn(auth::web::reject_cross_site)),
+        )
         .merge(sites::web::public_router(m.sites.clone()))
         .merge(protected)
         .merge(auth::api::public_router(m.auth_web.clone()))

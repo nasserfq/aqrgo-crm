@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use auth::{AuthConfig, AuthError, AuthService, Channel, CodeMailer};
+use auth::{AuthConfig, AuthError, AuthService, Channel, CodeMailer, LinkOutcome};
 
 #[derive(Default, Clone)]
 struct Inbox(Arc<Mutex<Vec<(String, String)>>>);
@@ -188,12 +188,10 @@ async fn one_telegram_account_per_user_via_link_token() {
     let user = auth.user_for_session(&s).await.unwrap().unwrap();
 
     let token = auth.create_link(user.id).await.unwrap();
-    let linked = auth
-        .redeem_link(Channel::Telegram, &token, 777)
-        .await
-        .unwrap()
-        .expect("linked");
-    assert_eq!(linked.id, user.id);
+    assert!(matches!(
+        auth.redeem_link(Channel::Telegram, &token, 777).await.unwrap(),
+        LinkOutcome::Linked(u) if u.id == user.id
+    ));
     assert_eq!(
         auth.user_for(Channel::Telegram, 777)
             .await
@@ -203,18 +201,21 @@ async fn one_telegram_account_per_user_via_link_token() {
         user.id
     );
     // Tokens are single use.
-    assert!(auth
-        .redeem_link(Channel::Telegram, &token, 888)
-        .await
-        .unwrap()
-        .is_none());
+    assert!(matches!(
+        auth.redeem_link(Channel::Telegram, &token, 888)
+            .await
+            .unwrap(),
+        LinkOutcome::Invalid
+    ));
 
     // Linking a new Telegram account replaces the old one.
     let token2 = auth.create_link(user.id).await.unwrap();
-    auth.redeem_link(Channel::Telegram, &token2, 999)
-        .await
-        .unwrap()
-        .unwrap();
+    assert!(matches!(
+        auth.redeem_link(Channel::Telegram, &token2, 999)
+            .await
+            .unwrap(),
+        LinkOutcome::Linked(_)
+    ));
     assert!(auth
         .user_for(Channel::Telegram, 777)
         .await
@@ -242,10 +243,12 @@ async fn whatsapp_links_separately_from_telegram() {
 
     assert!(!auth.linked(Channel::WhatsApp, user.id).await.unwrap());
     let token = auth.create_link(user.id).await.unwrap();
-    auth.redeem_link(Channel::WhatsApp, &token, phone)
-        .await
-        .unwrap()
-        .expect("linked");
+    assert!(matches!(
+        auth.redeem_link(Channel::WhatsApp, &token, phone)
+            .await
+            .unwrap(),
+        LinkOutcome::Linked(_)
+    ));
     assert!(auth.linked(Channel::WhatsApp, user.id).await.unwrap());
     assert!(!auth.linked(Channel::Telegram, user.id).await.unwrap());
     assert_eq!(
@@ -474,4 +477,127 @@ mod app_handoff {
         assert_eq!(h.redeem(&code, "secret-verifier").await.unwrap(), None);
         assert_eq!(h.redeem("nope", "secret-verifier").await.unwrap(), None);
     }
+}
+
+#[tokio::test]
+async fn a_chat_linked_to_one_account_is_not_moved_by_another_accounts_link() {
+    let (auth, _) = setup(AuthConfig::default()).await;
+    let victim = auth
+        .sign_in_verified_email("victim@example.com", "V")
+        .await
+        .unwrap();
+    let victim = auth.user_for_session(&victim).await.unwrap().unwrap();
+    let attacker = auth
+        .sign_in_verified_email("attacker@example.com", "A")
+        .await
+        .unwrap();
+    let attacker = auth.user_for_session(&attacker).await.unwrap().unwrap();
+
+    let token = auth.create_link(victim.id).await.unwrap();
+    assert!(matches!(
+        auth.redeem_link(Channel::Telegram, &token, 777).await.unwrap(),
+        LinkOutcome::Linked(u) if u.id == victim.id
+    ));
+
+    // The victim taps a link the attacker made: refused, naming the account
+    // the chat already belongs to, and the chat stays with the victim.
+    let hostile = auth.create_link(attacker.id).await.unwrap();
+    match auth
+        .redeem_link(Channel::Telegram, &hostile, 777)
+        .await
+        .unwrap()
+    {
+        LinkOutcome::LinkedElsewhere { email } => assert_eq!(email, "victim@example.com"),
+        other => panic!("expected LinkedElsewhere, got {other:?}"),
+    }
+    assert_eq!(
+        auth.user_for(Channel::Telegram, 777)
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        victim.id
+    );
+    assert!(!auth.linked(Channel::Telegram, attacker.id).await.unwrap());
+
+    // Once the chat is unlinked from its account, the same link works.
+    auth.unlink(Channel::Telegram, victim.id).await.unwrap();
+    assert!(matches!(
+        auth.redeem_link(Channel::Telegram, &hostile, 777).await.unwrap(),
+        LinkOutcome::Linked(u) if u.id == attacker.id
+    ));
+
+    // Re-linking a chat to the account it already belongs to is fine.
+    let again = auth.create_link(attacker.id).await.unwrap();
+    assert!(matches!(
+        auth.redeem_link(Channel::Telegram, &again, 777).await.unwrap(),
+        LinkOutcome::Linked(u) if u.id == attacker.id
+    ));
+}
+
+#[tokio::test]
+async fn twenty_wrong_codes_in_a_day_stop_new_codes_for_that_email() {
+    let (auth, inbox) = setup(AuthConfig::default()).await;
+    for _ in 0..4 {
+        auth.request_code("a@example.com").await.unwrap();
+        let real = inbox.last_code();
+        let wrong = if real == "000000" { "111111" } else { "000000" };
+        for _ in 0..5 {
+            assert!(auth.verify_code("a@example.com", wrong).await.is_err());
+        }
+    }
+    assert!(matches!(
+        auth.request_code("a@example.com").await,
+        Err(AuthError::LockedForToday)
+    ));
+    assert_eq!(inbox.count(), 4, "no more codes emailed today");
+    // Other emails are not affected.
+    auth.request_code("b@example.com").await.unwrap();
+}
+
+#[tokio::test]
+async fn a_valid_code_is_refused_once_the_days_wrong_tries_are_used_up() {
+    let pool = testkit::fresh_pool().await;
+    common::db::migrate_module(&pool, auth::SCHEMA, &auth::MIGRATOR)
+        .await
+        .unwrap();
+    let inbox = Inbox::default();
+    let auth = AuthService::new(pool.clone(), Arc::new(inbox.clone()), AuthConfig::default());
+
+    // Earlier today someone guessed wrong 20 times on older codes.
+    sqlx::query(
+        "INSERT INTO auth.login_codes (email, code_hash, attempts, failures, expires_at, used_at)
+         VALUES ('a@example.com', 'x', 5, 5, now(), now()),
+                ('a@example.com', 'x', 5, 5, now(), now()),
+                ('a@example.com', 'x', 5, 5, now(), now()),
+                ('a@example.com', 'x', 5, 5, now(), now())",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    // A code issued just before the cap is no longer accepted.
+    sqlx::query("UPDATE auth.login_codes SET failures = 4 WHERE id = 1")
+        .execute(&pool)
+        .await
+        .unwrap();
+    auth.request_code("a@example.com").await.unwrap();
+    let code = inbox.last_code();
+    let wrong = if code == "000000" { "111111" } else { "000000" };
+    assert!(matches!(
+        auth.verify_code("a@example.com", wrong).await,
+        Err(AuthError::InvalidCode)
+    ));
+    assert!(matches!(
+        auth.verify_code("a@example.com", &code).await,
+        Err(AuthError::LockedForToday)
+    ));
+
+    // Failures older than a day no longer count.
+    sqlx::query("UPDATE auth.login_codes SET created_at = now() - interval '25 hours'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    auth.request_code("a@example.com").await.unwrap();
+    let code = inbox.last_code();
+    assert!(auth.verify_code("a@example.com", &code).await.is_ok());
 }

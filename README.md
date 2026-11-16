@@ -70,6 +70,10 @@ Every push to `main` runs the tests, builds the Docker image on GitHub, pushes i
 
 Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment called `production` if you want to approve each deploy.
 
+Only `main` deploys: the build and deploy jobs skip every other branch, even on a manual run. Because a branch could edit that check in its own copy of the workflow, also lock the `production` environment to `main`: repository **Settings → Environments → production → Deployment branches and tags → Selected branches and tags → add `main`**. Then production secrets are never handed to any other branch.
+
+Daily database backups are written to `$DEPLOY_DIR/backups` readable by root only (folder `700`, files `600`), since the server is shared with other apps.
+
 **Settings in `.env`:**
 
 - **AWS**: an IAM user with `ses:SendEmail` and `bedrock:InvokeModel`. Instead of giving that user Bedrock access, you can paste a Bedrock API key into `AWS_BEARER_TOKEN_BEDROCK`. Its region must match `AWS_REGION`. If SES is in another region, set `SES_REGION` (for example `us-east-2`). In SES, verify the `aqrgo.com` domain (it gives you DNS records) and request production access. In Bedrock, enable access to the Amazon Nova model in your region.

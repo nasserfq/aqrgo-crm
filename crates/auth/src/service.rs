@@ -10,6 +10,9 @@ use subtle::ConstantTimeEq;
 const CODE_TTL_MINUTES: i32 = 10;
 const MAX_ATTEMPTS: i32 = 5;
 const MAX_CODES_PER_HOUR: i64 = 5;
+/// Wrong codes allowed per email in 24 hours, across all its codes. Past this
+/// no codes are sent or accepted for that email until the day rolls over.
+const MAX_FAILURES_PER_DAY: i64 = 20;
 /// Sessions renew on use, so this is how long one may sit unused.
 pub const SESSION_DAYS: i32 = 365;
 const LINK_MINUTES: i32 = 15;
@@ -42,12 +45,25 @@ pub enum AuthError {
     TooManyAttempts,
     #[error("طلبات كثيرة، حاول بعد قليل")]
     TooManyRequests,
+    #[error("محاولات خاطئة كثيرة اليوم، حاول غداً أو ادخل بحساب Google")]
+    LockedForToday,
     #[error("هذا الحساب غير مسموح له بالدخول")]
     NotAllowed,
     #[error("تعذر إرسال البريد، حاول مرة أخرى")]
     Mail(String),
     #[error(transparent)]
     Db(#[from] sqlx::Error),
+}
+
+/// What happened when a chat account redeemed a link token.
+#[derive(Debug)]
+pub enum LinkOutcome {
+    /// The chat now sends leads to this user.
+    Linked(CurrentUser),
+    /// The chat is linked to another account (this email) and was left there.
+    LinkedElsewhere { email: String },
+    /// The token is unknown, used or expired.
+    Invalid,
 }
 
 /// Delivers login codes. Production uses [`MailerCodeSender`] (a background job).
@@ -226,6 +242,9 @@ impl AuthService {
             tracing::info!(%email, "login code requested for email outside allow-list");
             return Ok(());
         }
+        if self.failures_today(&email).await? >= MAX_FAILURES_PER_DAY {
+            return Err(AuthError::LockedForToday);
+        }
         let recent: i64 = sqlx::query_scalar(
             "SELECT count(*) FROM auth.login_codes WHERE email = $1 AND created_at > now() - interval '1 hour'",
         )
@@ -285,6 +304,9 @@ impl AuthService {
         let Some((id, hash)) = row else {
             return Err(AuthError::InvalidCode);
         };
+        if self.failures_today(&email).await? >= MAX_FAILURES_PER_DAY {
+            return Err(AuthError::LockedForToday);
+        }
         // Reserve one attempt atomically before checking, so a burst of
         // parallel guesses can't all slip under the limit.
         let reserved = sqlx::query(
@@ -299,6 +321,10 @@ impl AuthService {
         }
         let given = sha256_hex(&format!("{email}:{code}"));
         if !bool::from(given.as_bytes().ct_eq(hash.as_bytes())) {
+            sqlx::query("UPDATE auth.login_codes SET failures = failures + 1 WHERE id = $1")
+                .bind(id)
+                .execute(&self.pool)
+                .await?;
             return Err(AuthError::InvalidCode);
         }
         let used = sqlx::query(
@@ -312,6 +338,17 @@ impl AuthService {
         }
         let user_id = self.upsert_user(&email, None).await?;
         self.new_session(user_id).await
+    }
+
+    /// Wrong codes typed for `email` in the last 24 hours, across its codes.
+    async fn failures_today(&self, email: &str) -> Result<i64, AuthError> {
+        Ok(sqlx::query_scalar(
+            "SELECT coalesce(sum(failures), 0)::bigint FROM auth.login_codes
+             WHERE email = $1 AND created_at > now() - interval '24 hours'",
+        )
+        .bind(email)
+        .fetch_one(&self.pool)
+        .await?)
     }
 
     /// For identity providers that already verified the email (Google).
@@ -423,14 +460,17 @@ impl AuthService {
         Ok(token)
     }
 
-    /// Links the chat account `id` on `channel` to the token's user,
-    /// replacing any earlier link on that channel.
+    /// Links the chat account `id` on `channel` to the token's user, replacing
+    /// that user's earlier link on the channel. A chat already linked to a
+    /// *different* user is never moved: it must be unlinked from that account
+    /// first, so someone else's link can't quietly redirect your leads. The
+    /// token is kept in that case, so it works once the chat is unlinked.
     pub async fn redeem_link(
         &self,
         channel: Channel,
         token: &str,
         id: i64,
-    ) -> Result<Option<CurrentUser>, AuthError> {
+    ) -> Result<LinkOutcome, AuthError> {
         let col = channel.column();
         let mut tx = self.pool.begin().await?;
         let user_id: Option<i64> = sqlx::query_scalar(
@@ -440,14 +480,20 @@ impl AuthService {
         .fetch_optional(&mut *tx)
         .await?;
         let Some(user_id) = user_id else {
-            return Ok(None);
+            return Ok(LinkOutcome::Invalid);
         };
-        sqlx::query(&format!(
-            "UPDATE auth.users SET {col} = NULL WHERE {col} = $1"
+        let current: Option<(i64, String)> = sqlx::query_as(&format!(
+            "SELECT id, email FROM auth.users WHERE {col} = $1 FOR UPDATE"
         ))
         .bind(id)
-        .execute(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
+        if let Some((owner, email)) = current {
+            if owner != user_id {
+                tx.rollback().await?;
+                return Ok(LinkOutcome::LinkedElsewhere { email });
+            }
+        }
         let row: UserRow = sqlx::query_as(&format!(
             "UPDATE auth.users SET {col} = $2 WHERE id = $1 RETURNING id, email, name"
         ))
@@ -456,7 +502,7 @@ impl AuthService {
         .fetch_one(&mut *tx)
         .await?;
         tx.commit().await?;
-        Ok(Some(row.into()))
+        Ok(LinkOutcome::Linked(row.into()))
     }
 
     /// The user whose `channel` account is `id`, if linked.

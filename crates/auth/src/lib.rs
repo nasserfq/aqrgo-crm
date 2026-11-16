@@ -14,8 +14,8 @@ mod service;
 pub mod web;
 
 pub use service::{
-    login_code_email, AuthConfig, AuthError, AuthService, Channel, CodeMailer, MailerCodeSender,
-    ReviewLogin, SESSION_DAYS,
+    login_code_email, AuthConfig, AuthError, AuthService, Channel, CodeMailer, LinkOutcome,
+    MailerCodeSender, ReviewLogin, SESSION_DAYS,
 };
 
 pub const SCHEMA: &str = "auth";

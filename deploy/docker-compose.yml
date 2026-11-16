@@ -34,7 +34,9 @@ services:
       timeout: 3s
       retries: 20
 
-  # Daily pg_dump into ./backups, keeping the last 14 days.
+  # Daily pg_dump into ./backups, keeping the last 14 days. The dumps hold
+  # every user's leads, and the server is shared with other apps, so the
+  # folder and files are readable by root only (umask 077, chmod 700/600).
   backup:
     image: postgres:17-alpine
     restart: unless-stopped
@@ -48,6 +50,9 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        umask 077
+        chmod 700 /backups
+        find /backups -name 'crm-*.sql.gz' -exec chmod 600 {} +
         while true; do
           f=/backups/crm-$$(date +%Y%m%d-%H%M).sql.gz
           pg_dump -h db -U crm crm | gzip > "$$f" && echo "backup written: $$f"
