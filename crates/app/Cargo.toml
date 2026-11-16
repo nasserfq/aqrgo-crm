@@ -39,3 +39,5 @@ http-body-util = "0.1"
 async-trait.workspace = true
 serde_json.workspace = true
 sentry = { workspace = true, features = ["test"] }
+sha2.workspace = true
+hex.workspace = true

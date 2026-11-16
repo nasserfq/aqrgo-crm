@@ -321,7 +321,20 @@ impl AuthService {
         .fetch_optional(&self.pool)
         .await?;
         // An email removed from ALLOWED_EMAILS loses its existing sessions too.
-        Ok(row.filter(|u| self.config.allows(&u.email)).map(Into::into))
+        let Some(user) = row.filter(|u| self.config.allows(&u.email)) else {
+            return Ok(None);
+        };
+        // Sliding expiry: a session in use stays signed in until sign-out. It is
+        // pushed forward at most once a day, so most requests don't write.
+        sqlx::query(
+            "UPDATE auth.sessions SET expires_at = now() + make_interval(days => $2)
+             WHERE token_hash = $1 AND expires_at < now() + make_interval(days => $2 - 1)",
+        )
+        .bind(sha256_hex(token))
+        .bind(SESSION_DAYS)
+        .execute(&self.pool)
+        .await?;
+        Ok(Some(user.into()))
     }
 
     pub async fn sign_out(&self, token: &str) -> Result<(), AuthError> {

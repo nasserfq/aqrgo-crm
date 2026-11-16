@@ -55,7 +55,8 @@
         {
           "color": "#6c4fd8"
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "scheme": "aqrgo",
     "extra": {

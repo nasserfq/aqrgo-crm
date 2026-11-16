@@ -10,6 +10,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
+use sha2::Digest;
 use tower::ServiceExt;
 
 #[derive(Default, Clone)]
@@ -342,4 +343,124 @@ async fn a_phone_registers_for_notifications() {
     )
     .await;
     assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+async fn app_with_google() -> (Router, app::Modules) {
+    let pool = testkit::fresh_pool().await;
+    app::migrate(&pool).await.unwrap();
+    let web = auth::web::WebConfig {
+        public_url: "http://localhost".into(),
+        google: Some(auth::web::GoogleConfig {
+            client_id: "client".into(),
+            client_secret: "secret".into(),
+        }),
+        telegram_bot: None,
+        whatsapp_number: None,
+    };
+    let modules = app::Modules::new(
+        pool.clone(),
+        jobs::Jobs::new(pool),
+        Arc::new(Inbox::default()),
+        auth::AuthConfig::default(),
+        web,
+        None,
+        None,
+    );
+    (app::router(&modules), modules)
+}
+
+async fn redirect(app: &Router, uri: &str) -> (String, Vec<String>) {
+    let res = app
+        .clone()
+        .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert!(res.status().is_redirection(), "{uri}: {}", res.status());
+    let location = res.headers()[header::LOCATION]
+        .to_str()
+        .unwrap()
+        .to_string();
+    let cookies = res
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .map(|v| v.to_str().unwrap().to_string())
+        .collect();
+    (location, cookies)
+}
+
+#[tokio::test]
+async fn the_app_signs_in_with_google_through_a_one_time_code() {
+    let (app, modules) = app_with_google().await;
+
+    // The app asks which buttons to show.
+    let (status, options) = call(&app, Method::GET, "/api/v1/auth/options", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(options["google"], true);
+
+    // Starting from the app goes to Google and remembers the app's challenge.
+    let verifier = "a-long-random-verifier-the-app-keeps";
+    let challenge = hex::encode(sha2::Sha256::digest(verifier.as_bytes()));
+    let (location, cookies) = redirect(&app, &format!("/auth/google?app={challenge}")).await;
+    assert!(location.starts_with("https://accounts.google.com/"));
+    assert!(cookies
+        .iter()
+        .any(|c| c.starts_with(&format!("aqrgo_oauth_app={challenge}"))));
+
+    // A malformed challenge goes straight back to the app with an error.
+    let (location, _) = redirect(&app, "/auth/google?app=nope").await;
+    assert_eq!(location, "aqrgo://auth?error=google");
+
+    // After Google, the app holds a one-time code; with the verifier it gets a token.
+    let session = modules
+        .auth_web
+        .service
+        .sign_in_verified_email("nasser@example.com", "Nasser")
+        .await
+        .unwrap();
+    let code = modules.auth_web.handoff.issue(session, challenge);
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/google",
+        None,
+        Some(json!({ "code": code, "verifier": "wrong" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["error"], "تعذر الدخول عبر Google، حاول مرة أخرى");
+
+    let code = {
+        let session = modules
+            .auth_web
+            .service
+            .sign_in_verified_email("nasser@example.com", "Nasser")
+            .await
+            .unwrap();
+        let challenge = hex::encode(sha2::Sha256::digest(verifier.as_bytes()));
+        modules.auth_web.handoff.issue(session, challenge)
+    };
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/google",
+        None,
+        Some(json!({ "code": code, "verifier": verifier })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["user"]["email"], "nasser@example.com");
+    let token = body["token"].as_str().unwrap();
+    let (status, me) = call(&app, Method::GET, "/api/v1/me", Some(token), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(me["email"], "nasser@example.com");
+}
+
+#[tokio::test]
+async fn google_is_hidden_from_the_app_when_not_set_up() {
+    let (app, _) = app().await;
+    let (_, options) = call(&app, Method::GET, "/api/v1/auth/options", None, None).await;
+    assert_eq!(options["google"], false);
+    let (location, _) = redirect(&app, &format!("/auth/google?app={}", "a".repeat(64))).await;
+    assert_eq!(location, "aqrgo://auth?error=google");
 }

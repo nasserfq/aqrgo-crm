@@ -15,10 +15,14 @@ use common::{ui::Nav, CurrentUser};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 
-use crate::{AuthError, AuthService, Channel};
+use crate::{handoff::AppHandoff, AuthError, AuthService, Channel};
 
 pub const SESSION_COOKIE: &str = "aqrgo_session";
 const STATE_COOKIE: &str = "aqrgo_oauth_state";
+/// Set when the phone app started Google sign-in; holds the app's challenge.
+const APP_COOKIE: &str = "aqrgo_oauth_app";
+/// Where the browser goes back to the app after Google sign-in.
+const APP_RETURN: &str = "aqrgo://auth";
 
 #[derive(Clone, Debug)]
 pub struct GoogleConfig {
@@ -47,6 +51,7 @@ impl WebConfig {
 pub struct AuthWeb {
     pub service: AuthService,
     pub config: WebConfig,
+    pub handoff: AppHandoff,
     http: reqwest::Client,
 }
 
@@ -55,6 +60,7 @@ impl AuthWeb {
         Self {
             service,
             config,
+            handoff: AppHandoff::default(),
             http: reqwest::Client::new(),
         }
     }
@@ -250,9 +256,37 @@ async fn logout(State(s): State<AuthWeb>, jar: CookieJar) -> Response {
         .into_response()
 }
 
-async fn google_start(State(s): State<AuthWeb>, jar: CookieJar) -> Response {
+#[derive(Deserialize)]
+struct GoogleStart {
+    /// The phone app's challenge (hex SHA-256 of its verifier); see [`crate::handoff`].
+    app: Option<String>,
+}
+
+fn app_cookie(config: &WebConfig, challenge: String) -> Cookie<'static> {
+    Cookie::build((APP_COOKIE, challenge))
+        .path("/auth/google")
+        .http_only(true)
+        .secure(config.secure())
+        .same_site(SameSite::Lax)
+        .max_age(time::Duration::minutes(10))
+        .build()
+}
+
+async fn google_start(
+    State(s): State<AuthWeb>,
+    jar: CookieJar,
+    Query(q): Query<GoogleStart>,
+) -> Response {
+    let app = match q.app {
+        Some(c) if crate::handoff::valid_challenge(&c) => Some(c),
+        Some(_) => return Redirect::to(&format!("{APP_RETURN}?error=google")).into_response(),
+        None => None,
+    };
     let Some(g) = &s.config.google else {
-        return Redirect::to("/login").into_response();
+        return match app {
+            Some(_) => Redirect::to(&format!("{APP_RETURN}?error=google")).into_response(),
+            None => Redirect::to("/login").into_response(),
+        };
     };
     let state: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
@@ -279,6 +313,10 @@ async fn google_start(State(s): State<AuthWeb>, jar: CookieJar) -> Response {
         .same_site(SameSite::Lax)
         .max_age(time::Duration::minutes(10))
         .build();
+    let jar = match app {
+        Some(c) => jar.add(app_cookie(&s.config, c)),
+        None => jar.remove(Cookie::build(APP_COOKIE).path("/auth/google").build()),
+    };
     (jar.add(cookie), Redirect::to(url.as_str())).into_response()
 }
 
@@ -307,11 +345,18 @@ async fn google_callback(
     jar: CookieJar,
     Query(q): Query<GoogleCallback>,
 ) -> Response {
+    let app = jar.get(APP_COOKIE).map(|c| c.value().to_string());
+    let failed_to = if app.is_some() {
+        format!("{APP_RETURN}?error=google")
+    } else {
+        "/login?error=google".to_string()
+    };
     let fail = |jar: CookieJar, why: &str| {
         tracing::warn!(reason = why, "google sign-in failed");
         (
-            jar.remove(Cookie::build(STATE_COOKIE).path("/auth/google").build()),
-            Redirect::to("/login?error=google"),
+            jar.remove(Cookie::build(STATE_COOKIE).path("/auth/google").build())
+                .remove(Cookie::build(APP_COOKIE).path("/auth/google").build()),
+            Redirect::to(&failed_to),
         )
             .into_response()
     };
@@ -363,17 +408,33 @@ async fn google_callback(
     if !user.email_verified {
         return fail(jar, "email not verified");
     }
-    let jar = jar.remove(Cookie::build(STATE_COOKIE).path("/auth/google").build());
-    match s
+    let jar = jar
+        .remove(Cookie::build(STATE_COOKIE).path("/auth/google").build())
+        .remove(Cookie::build(APP_COOKIE).path("/auth/google").build());
+    let signed_in = s
         .service
         .sign_in_verified_email(&user.email, &user.name)
-        .await
-    {
-        Ok(token) => (jar.add(session_cookie(&s.config, token)), Redirect::to("/")).into_response(),
-        Err(AuthError::NotAllowed) => Redirect::to("/login?error=not_allowed").into_response(),
-        Err(e) => {
+        .await;
+    match (signed_in, app) {
+        // The phone app gets a one-time code, never the token, in the redirect.
+        (Ok(token), Some(challenge)) => {
+            let code = s.handoff.issue(token, challenge);
+            (jar, Redirect::to(&format!("{APP_RETURN}?code={code}"))).into_response()
+        }
+        (Ok(token), None) => {
+            (jar.add(session_cookie(&s.config, token)), Redirect::to("/")).into_response()
+        }
+        (Err(AuthError::NotAllowed), Some(_)) => (
+            jar,
+            Redirect::to(&format!("{APP_RETURN}?error=not_allowed")),
+        )
+            .into_response(),
+        (Err(AuthError::NotAllowed), None) => {
+            (jar, Redirect::to("/login?error=not_allowed")).into_response()
+        }
+        (Err(e), _) => {
             tracing::error!(error = %e, "google sign-in");
-            Redirect::to("/login?error=google").into_response()
+            (jar, Redirect::to(&failed_to)).into_response()
         }
     }
 }

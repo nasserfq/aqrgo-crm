@@ -8,6 +8,7 @@
 //! `common::CurrentUser`.
 
 pub mod api;
+pub mod handoff;
 mod service;
 pub mod web;
 

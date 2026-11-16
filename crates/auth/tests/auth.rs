@@ -344,3 +344,43 @@ fn login_code_email_is_branded_arabic_html_with_a_text_fallback() {
     );
     assert!(!html.contains("—"), "no em-dashes");
 }
+
+#[tokio::test]
+async fn a_session_in_use_stays_signed_in_until_sign_out() {
+    let pool = testkit::fresh_pool().await;
+    common::db::migrate_module(&pool, auth::SCHEMA, &auth::MIGRATOR)
+        .await
+        .unwrap();
+    let auth = AuthService::new(
+        pool.clone(),
+        Arc::new(Inbox::default()),
+        AuthConfig::default(),
+    );
+    let session = auth
+        .sign_in_verified_email("nasser@example.com", "Nasser")
+        .await
+        .unwrap();
+
+    // Pretend the session was made 29 days ago: one day left.
+    sqlx::query("UPDATE auth.sessions SET expires_at = now() + interval '1 day'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(auth.user_for_session(&session).await.unwrap().is_some());
+
+    // Using it pushed the expiry a full 30 days out again.
+    let left: f64 = sqlx::query_scalar(
+        "SELECT extract(epoch FROM expires_at - now())::float8 / 86400 FROM auth.sessions",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(left > 29.9, "expiry slid forward, {left} days left");
+
+    // A session left unused past its expiry is gone.
+    sqlx::query("UPDATE auth.sessions SET expires_at = now() - interval '1 minute'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(auth.user_for_session(&session).await.unwrap().is_none());
+}
