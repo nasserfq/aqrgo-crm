@@ -8,6 +8,8 @@ pub struct Config {
     pub port: u16,
     pub public_url: String,
     pub allowed_emails: Vec<String>,
+    /// Fixed login for App Store reviewers: APP_REVIEW_EMAIL + APP_REVIEW_CODE (10+ digits).
+    pub review_login: Option<auth::ReviewLogin>,
     pub google_client_id: Option<String>,
     pub google_client_secret: Option<String>,
     pub mail_from: Option<String>,
@@ -95,6 +97,13 @@ impl Config {
                         .collect()
                 })
                 .unwrap_or_default(),
+            review_login: match (opt("APP_REVIEW_EMAIL"), opt("APP_REVIEW_CODE")) {
+                (Some(e), Some(c)) => Some(
+                    auth::ReviewLogin::new(&e, &c)
+                        .context("APP_REVIEW_CODE must be 10+ digits and APP_REVIEW_EMAIL valid")?,
+                ),
+                _ => None,
+            },
             google_client_id: opt("GOOGLE_CLIENT_ID"),
             google_client_secret: opt("GOOGLE_CLIENT_SECRET"),
             mail_from: opt("MAIL_FROM"),

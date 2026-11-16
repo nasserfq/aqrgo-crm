@@ -52,6 +52,7 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
     });
     let auth_config = auth::AuthConfig {
         allowed_emails: cfg.allowed_emails.clone(),
+        review_login: cfg.review_login.clone(),
     };
 
     // Telegram: point the webhook at us and learn the bot's username.

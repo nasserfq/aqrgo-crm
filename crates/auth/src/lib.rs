@@ -15,6 +15,7 @@ pub mod web;
 
 pub use service::{
     login_code_email, AuthConfig, AuthError, AuthService, Channel, CodeMailer, MailerCodeSender,
+    ReviewLogin,
 };
 
 pub const SCHEMA: &str = "auth";
