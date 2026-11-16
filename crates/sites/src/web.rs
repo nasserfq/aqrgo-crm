@@ -33,6 +33,11 @@ pub struct SitesWeb {
 }
 
 impl SitesWeb {
+    /// See [`SitesService::forget_owner`].
+    pub async fn forget_owner(&self, owner: i64) -> Result<(), sqlx::Error> {
+        self.service.forget_owner(owner).await
+    }
+
     /// `public_url` is the CRM's own address, e.g. `https://aqrgo.com`.
     pub fn new(service: SitesService, public_url: &str) -> Self {
         let (scheme, rest) = public_url

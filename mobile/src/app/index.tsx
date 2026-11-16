@@ -27,7 +27,7 @@ function useDebounced<T>(value: T, ms: number) {
 }
 
 export default function Listings() {
-  const { api, signOut } = useSession();
+  const { api } = useSession();
   const c = useColors();
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<Status | ''>('');
@@ -44,8 +44,13 @@ export default function Listings() {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Pressable accessibilityRole="button" onPress={signOut} hitSlop={12} style={{ paddingHorizontal: 8 }}>
-              <T style={{ color: c.accent, fontFamily: fonts.medium }}>خروج</T>
+            <Pressable
+              testID="account"
+              accessibilityRole="button"
+              onPress={() => router.push('/account')}
+              hitSlop={12}
+              style={{ paddingHorizontal: 8 }}>
+              <T style={{ color: c.accent, fontFamily: fonts.medium }}>حسابي</T>
             </Pressable>
           ),
         }}
@@ -61,7 +66,7 @@ export default function Listings() {
         ListHeaderComponent={
           <View style={{ gap: 12, marginBottom: 4 }}>
             <Button testID="add" label="+ إضافة عرض" onPress={() => router.push('/listings/new')} />
-            <Field testID="search" placeholder="بحث: رقم مخطط، حي، اسم، جوال" value={q} onChangeText={setQ} returnKeyType="search" clearButtonMode="while-editing" />
+            <Field testID="search" placeholder="ابحث في عروضك" value={q} onChangeText={setQ} returnKeyType="search" clearButtonMode="while-editing" />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {FILTERS.map((f) => {
                 const on = f.value === status;

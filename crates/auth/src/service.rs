@@ -10,7 +10,8 @@ use subtle::ConstantTimeEq;
 const CODE_TTL_MINUTES: i32 = 10;
 const MAX_ATTEMPTS: i32 = 5;
 const MAX_CODES_PER_HOUR: i64 = 5;
-const SESSION_DAYS: i32 = 30;
+/// Sessions renew on use, so this is how long one may sit unused.
+pub const SESSION_DAYS: i32 = 365;
 const LINK_MINUTES: i32 = 15;
 
 /// A chat app a user can link one account of, to send leads from.
@@ -105,6 +106,27 @@ pub fn login_code_email(to: &str, code: &str, public_url: &str) -> mailer::Email
 pub struct AuthConfig {
     /// Lowercase emails allowed to sign in. Empty means anyone may sign up.
     pub allowed_emails: Vec<String>,
+    /// A fixed login for Apple's App Store reviewers, who can't read our emails.
+    pub review_login: Option<ReviewLogin>,
+}
+
+/// One email that signs in with a fixed code and gets no email. The code must
+/// be at least [`ReviewLogin::MIN_CODE`] digits so it can't be guessed.
+#[derive(Clone, Debug)]
+pub struct ReviewLogin {
+    email: String,
+    code: String,
+}
+
+impl ReviewLogin {
+    pub const MIN_CODE: usize = 10;
+
+    /// `None` (review login off) unless the email is valid and the code long enough.
+    pub fn new(email: &str, code: &str) -> Option<Self> {
+        let email = normalize_email(email).ok()?;
+        let code: String = code.chars().filter(|c| c.is_ascii_digit()).collect();
+        (code.len() >= Self::MIN_CODE).then_some(Self { email, code })
+    }
 }
 
 impl AuthConfig {
@@ -182,8 +204,18 @@ impl AuthService {
 
     /// Emails a fresh 6-digit code. For emails outside the allow-list this
     /// quietly does nothing, so the page doesn't reveal who has access.
+    fn review_login(&self, email: &str) -> Option<&ReviewLogin> {
+        self.config
+            .review_login
+            .as_ref()
+            .filter(|r| r.email == email)
+    }
+
     pub async fn request_code(&self, raw_email: &str) -> Result<(), AuthError> {
         let email = normalize_email(raw_email)?;
+        if self.review_login(&email).is_some() {
+            return Ok(());
+        }
         if !self.config.allows(&email) {
             tracing::info!(%email, "login code requested for email outside allow-list");
             return Ok(());
@@ -229,6 +261,13 @@ impl AuthService {
             .chars()
             .filter(|c| c.is_ascii_digit())
             .collect();
+        if let Some(review) = self.review_login(&email) {
+            if !bool::from(code.as_bytes().ct_eq(review.code.as_bytes())) {
+                return Err(AuthError::InvalidCode);
+            }
+            let user_id = self.upsert_user(&email, None).await?;
+            return self.new_session(user_id).await;
+        }
         let row: Option<(i64, String)> = sqlx::query_as(
             "SELECT id, code_hash FROM auth.login_codes
              WHERE email = $1 AND used_at IS NULL AND expires_at > now()
@@ -321,7 +360,37 @@ impl AuthService {
         .fetch_optional(&self.pool)
         .await?;
         // An email removed from ALLOWED_EMAILS loses its existing sessions too.
-        Ok(row.filter(|u| self.config.allows(&u.email)).map(Into::into))
+        let Some(user) = row.filter(|u| self.config.allows(&u.email)) else {
+            return Ok(None);
+        };
+        // Sliding expiry: a session in use stays signed in until sign-out. It is
+        // pushed forward at most once a day, so most requests don't write.
+        sqlx::query(
+            "UPDATE auth.sessions SET expires_at = now() + make_interval(days => $2)
+             WHERE token_hash = $1 AND expires_at < now() + make_interval(days => $2 - 1)",
+        )
+        .bind(sha256_hex(token))
+        .bind(SESSION_DAYS)
+        .execute(&self.pool)
+        .await?;
+        Ok(Some(user.into()))
+    }
+
+    /// Deletes the account, its sessions and chat links. Other modules delete
+    /// their own data first (see the app's delete-account route).
+    pub async fn delete_user(&self, user_id: i64) -> Result<(), AuthError> {
+        let email: Option<String> =
+            sqlx::query_scalar("DELETE FROM auth.users WHERE id = $1 RETURNING email")
+                .bind(user_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        if let Some(email) = email {
+            sqlx::query("DELETE FROM auth.login_codes WHERE email = $1")
+                .bind(email)
+                .execute(&self.pool)
+                .await?;
+        }
+        Ok(())
     }
 
     pub async fn sign_out(&self, token: &str) -> Result<(), AuthError> {

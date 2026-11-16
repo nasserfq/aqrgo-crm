@@ -2,7 +2,13 @@
 
 use std::sync::Arc;
 
-use axum::{http::header, middleware, response::IntoResponse, routing::get, Router};
+use axum::{
+    http::{header, StatusCode},
+    middleware,
+    response::IntoResponse,
+    routing::get,
+    Router,
+};
 use sqlx::PgPool;
 
 pub mod config;
@@ -26,6 +32,7 @@ pub async fn migrate(pool: &PgPool) -> anyhow::Result<()> {
     Ok(())
 }
 
+#[derive(Clone)]
 pub struct Modules {
     pub auth_web: auth::web::AuthWeb,
     pub listings: listings::ListingsService,
@@ -34,6 +41,8 @@ pub struct Modules {
     pub jobs: jobs::Jobs,
     pub telegram_secret: Option<String>,
     pub whatsapp: Option<whatsapp::webhook::HookConfig>,
+    /// Reads pasted leads for the app's "paste a lead" box (None without AWS).
+    pub extractor: Option<Arc<dyn ai::LeadExtractor>>,
     pool: PgPool,
 }
 
@@ -64,6 +73,7 @@ impl Modules {
             jobs,
             telegram_secret,
             whatsapp,
+            extractor: None,
             pool,
         }
     }
@@ -105,6 +115,88 @@ async fn htmx() -> impl IntoResponse {
     )
 }
 
+/// Deletes the signed-in user's account and everything they own, module by
+/// module, then the account itself. App Store rules require this in the app.
+async fn delete_account(
+    axum::extract::State(m): axum::extract::State<Modules>,
+    axum::Extension(user): axum::Extension<common::CurrentUser>,
+) -> axum::response::Response {
+    let result: Result<(), String> = async {
+        m.push
+            .forget_owner(user.id)
+            .await
+            .map_err(|e| e.to_string())?;
+        m.sites
+            .forget_owner(user.id)
+            .await
+            .map_err(|e| e.to_string())?;
+        telegram::forget_owner(&m.pool, user.id)
+            .await
+            .map_err(|e| e.to_string())?;
+        m.listings
+            .forget_owner(user.id)
+            .await
+            .map_err(|e| e.to_string())?;
+        m.auth_web
+            .service
+            .delete_user(user.id)
+            .await
+            .map_err(|e| e.to_string())
+    }
+    .await;
+    match result {
+        Ok(()) => {
+            tracing::info!(user = user.id, "account deleted");
+            StatusCode::NO_CONTENT.into_response()
+        }
+        Err(e) => {
+            tracing::error!(error = %e, user = user.id, "account deletion failed");
+            auth::api::error(StatusCode::INTERNAL_SERVER_ERROR, "حدث خطأ، حاول مرة أخرى")
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct ExtractRequest {
+    text: String,
+}
+
+/// The app's "paste a lead" box: the same AI as the Telegram bot reads the
+/// text and returns draft rows. Nothing is saved; the app fills its form with
+/// a draft and the person checks it before saving.
+async fn extract_listings(
+    axum::extract::State(m): axum::extract::State<Modules>,
+    axum::Json(r): axum::Json<ExtractRequest>,
+) -> axum::response::Response {
+    const MAX_CHARS: usize = 4000;
+    let text = r.text.trim();
+    if text.is_empty() {
+        return auth::api::error(StatusCode::UNPROCESSABLE_ENTITY, "الصق نص العرض أولاً");
+    }
+    if text.chars().count() > MAX_CHARS {
+        return auth::api::error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "النص طويل جداً، الصق عرضاً واحداً",
+        );
+    }
+    let Some(extractor) = &m.extractor else {
+        return auth::api::error(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "القراءة الآلية غير متاحة الآن، عبّئ الخانات يدوياً",
+        );
+    };
+    match extractor.extract(text, common::dates::today_riyadh()).await {
+        Ok(drafts) => axum::Json(serde_json::json!({ "listings": drafts })).into_response(),
+        Err(e) => {
+            tracing::warn!(error = %e, "app lead extraction failed");
+            auth::api::error(
+                StatusCode::BAD_GATEWAY,
+                "تعذرت قراءة النص الآن، حاول مرة أخرى أو عبّئ الخانات يدوياً",
+            )
+        }
+    }
+}
+
 /// The full HTTP app.
 pub fn router(m: &Modules) -> Router {
     let protected = listings::web::router(m.listings.clone())
@@ -119,6 +211,15 @@ pub fn router(m: &Modules) -> Router {
     let api = listings::api::router(m.listings.clone())
         .merge(push::api::router(m.push.clone()))
         .merge(auth::api::account_router())
+        .merge(
+            Router::new()
+                .route("/api/v1/me", axum::routing::delete(delete_account))
+                .route(
+                    "/api/v1/listings/extract",
+                    axum::routing::post(extract_listings),
+                )
+                .with_state(m.clone()),
+        )
         .layer(middleware::from_fn_with_state(
             m.auth_web.clone(),
             auth::api::require_token,

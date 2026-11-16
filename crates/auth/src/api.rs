@@ -56,6 +56,9 @@ pub fn public_router(state: AuthWeb) -> Router {
         .route("/api/v1/auth/code", post(request_code))
         .route("/api/v1/auth/verify", post(verify_code))
         .route("/api/v1/auth/logout", post(logout))
+        .route("/api/v1/auth/options", get(options))
+        .route("/api/v1/auth/google", post(google))
+        .route("/api/v1/auth/apple", post(apple))
         .with_state(state)
 }
 
@@ -102,6 +105,68 @@ struct VerifyRequest {
 
 async fn verify_code(State(state): State<AuthWeb>, Json(r): Json<VerifyRequest>) -> Response {
     let token = match state.service.verify_code(&r.email, &r.code).await {
+        Ok(t) => t,
+        Err(e) => return auth_error(e),
+    };
+    match state.service.user_for_session(&token).await {
+        Ok(Some(user)) => Json(json!({ "token": token, "user": user })).into_response(),
+        Ok(None) => auth_error(AuthError::NotAllowed),
+        Err(e) => auth_error(e),
+    }
+}
+
+/// Which sign-in buttons the app should show.
+async fn options(State(state): State<AuthWeb>) -> Response {
+    Json(json!({ "google": state.config.google.is_some() })).into_response()
+}
+
+#[derive(Deserialize)]
+struct GoogleRequest {
+    code: String,
+    verifier: String,
+}
+
+/// Finishes Google sign-in for the app: trades the one-time code from the
+/// `aqrgo://auth?code=…` redirect, plus the app's verifier, for a token.
+async fn google(State(state): State<AuthWeb>, Json(r): Json<GoogleRequest>) -> Response {
+    let Some(token) = state.handoff.redeem(&r.code, &r.verifier) else {
+        return error(
+            StatusCode::UNAUTHORIZED,
+            "تعذر الدخول عبر Google، حاول مرة أخرى",
+        );
+    };
+    match state.service.user_for_session(&token).await {
+        Ok(Some(user)) => Json(json!({ "token": token, "user": user })).into_response(),
+        Ok(None) => auth_error(AuthError::NotAllowed),
+        Err(e) => auth_error(e),
+    }
+}
+
+#[derive(Deserialize)]
+struct AppleRequest {
+    identity_token: String,
+    /// Apple shares the name only on the first sign-in, from the device.
+    #[serde(default)]
+    name: String,
+}
+
+/// Sign in with Apple: checks Apple's identity token and returns our token.
+async fn apple(State(state): State<AuthWeb>, Json(r): Json<AppleRequest>) -> Response {
+    let identity = match state.apple.verify(&r.identity_token).await {
+        Ok(i) => i,
+        Err(why) => {
+            tracing::warn!(reason = %why, "apple sign-in refused");
+            return error(
+                StatusCode::UNAUTHORIZED,
+                "تعذر الدخول عبر Apple، حاول مرة أخرى",
+            );
+        }
+    };
+    let token = match state
+        .service
+        .sign_in_verified_email(&identity.email, r.name.trim())
+        .await
+    {
         Ok(t) => t,
         Err(e) => return auth_error(e),
     };

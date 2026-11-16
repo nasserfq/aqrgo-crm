@@ -413,3 +413,13 @@ async fn a_logo_that_is_too_big_says_so() {
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     assert!(page.contains("أكبر من"), "{page}");
 }
+
+#[tokio::test]
+async fn the_privacy_policy_is_public() {
+    let (app, _) = app().await;
+    let (status, _, _, html) = call(&app, get("/privacy", None)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(html.contains("سياسة الخصوصية"));
+    assert!(html.contains("support@localhost"));
+    assert!(html.contains("حذف الحساب"));
+}

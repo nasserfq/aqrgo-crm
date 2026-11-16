@@ -1,22 +1,33 @@
-// Sign in: email, then the 6-digit code from the email (same as the web).
-import { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+// Sign in: Google, Apple (on iPhone), or email then the 6-digit code from the
+// email (same as the web).
+import { useEffect, useState } from 'react';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { Image, KeyboardAvoidingView, Platform, ScrollView, useColorScheme, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Field, Note, T } from '../components/ui';
 import { ApiError } from '../lib/api';
-import { useSession } from '../lib/session';
-import { fonts, useColors } from '../lib/theme';
+import { API_URL, useSession } from '../lib/session';
+import { appleAvailable, signInWithApple, signInWithGoogle, type SignedIn } from '../lib/social';
+import { fonts, radius, useColors } from '../lib/theme';
 
 export default function Login() {
   const { api, signIn } = useSession();
   const c = useColors();
+  const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [google, setGoogle] = useState(false);
+  const [apple, setApple] = useState(false);
+
+  useEffect(() => {
+    api.authOptions().then((o) => setGoogle(o.google), () => setGoogle(false));
+    if (Platform.OS === 'ios') appleAvailable().then(setApple);
+  }, [api]);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -35,6 +46,12 @@ export default function Login() {
       await api.requestCode(email.trim());
       setCode('');
       setStep('code');
+    });
+
+  const withProvider = (start: () => Promise<SignedIn>) =>
+    run(async () => {
+      const signed = await start();
+      if (signed) await signIn(signed.token, signed.user);
     });
 
   const verify = () =>
@@ -59,6 +76,30 @@ export default function Login() {
 
         {step === 'email' ? (
           <View style={{ gap: 16 }}>
+            {apple ? (
+              <AppleAuthentication.AppleAuthenticationButton
+                testID="apple"
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={
+                  scheme === 'dark'
+                    ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                    : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+                }
+                cornerRadius={radius}
+                style={{ height: 52 }}
+                onPress={() => withProvider(() => signInWithApple(api))}
+              />
+            ) : null}
+            {google ? (
+              <Button
+                testID="google"
+                kind="outline"
+                label="الدخول بحساب Google"
+                onPress={() => withProvider(() => signInWithGoogle(api, API_URL))}
+                disabled={busy}
+              />
+            ) : null}
+            {apple || google ? <T style={{ color: c.muted, textAlign: 'center' }}>أو برمز على بريدك</T> : null}
             <Field
               testID="email"
               label="البريد الإلكتروني"

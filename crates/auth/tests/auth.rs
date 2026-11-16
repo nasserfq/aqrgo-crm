@@ -133,6 +133,7 @@ async fn rejects_malformed_email() {
 async fn allow_list_blocks_other_emails_without_revealing_it() {
     let config = AuthConfig {
         allowed_emails: vec!["boss@aqrgo.com".into()],
+        ..Default::default()
     };
     let (auth, inbox) = setup(config).await;
     // Looks like success to the stranger, but no email is sent and no account is made.
@@ -317,6 +318,7 @@ async fn removing_an_email_from_the_allow_list_ends_its_sessions() {
         Arc::new(Inbox::default()),
         AuthConfig {
             allowed_emails: vec!["boss@aqrgo.com".into()],
+            ..Default::default()
         },
     );
     assert!(restricted
@@ -343,4 +345,77 @@ fn login_code_email_is_branded_arabic_html_with_a_text_fallback() {
         "logo is an absolute URL"
     );
     assert!(!html.contains("—"), "no em-dashes");
+}
+
+#[tokio::test]
+async fn a_session_in_use_stays_signed_in_until_sign_out() {
+    let pool = testkit::fresh_pool().await;
+    common::db::migrate_module(&pool, auth::SCHEMA, &auth::MIGRATOR)
+        .await
+        .unwrap();
+    let auth = AuthService::new(
+        pool.clone(),
+        Arc::new(Inbox::default()),
+        AuthConfig::default(),
+    );
+    let session = auth
+        .sign_in_verified_email("nasser@example.com", "Nasser")
+        .await
+        .unwrap();
+
+    // Pretend the session was made long ago: one day left.
+    sqlx::query("UPDATE auth.sessions SET expires_at = now() + interval '1 day'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(auth.user_for_session(&session).await.unwrap().is_some());
+
+    // Using it pushed the expiry a full SESSION_DAYS out again.
+    let left: f64 = sqlx::query_scalar(
+        "SELECT extract(epoch FROM expires_at - now())::float8 / 86400 FROM auth.sessions",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        left > f64::from(auth::SESSION_DAYS) - 0.1,
+        "expiry slid forward, {left} days left"
+    );
+
+    // A session left unused past its expiry is gone.
+    sqlx::query("UPDATE auth.sessions SET expires_at = now() - interval '1 minute'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(auth.user_for_session(&session).await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn the_app_review_login_uses_a_fixed_code_and_sends_no_email() {
+    assert!(
+        auth::ReviewLogin::new("review@aqrgo.com", "12345").is_none(),
+        "short codes are refused"
+    );
+    let (auth, inbox) = setup(AuthConfig {
+        review_login: auth::ReviewLogin::new("Review@aqrgo.com", "1234567890"),
+        ..Default::default()
+    })
+    .await;
+
+    auth.request_code("review@aqrgo.com").await.unwrap();
+    assert_eq!(inbox.count(), 0, "no email for the review login");
+    assert!(matches!(
+        auth.verify_code("review@aqrgo.com", "0000000000").await,
+        Err(AuthError::InvalidCode)
+    ));
+    let session = auth
+        .verify_code("review@aqrgo.com", "١٢٣٤٥٦٧٨٩٠")
+        .await
+        .unwrap();
+    let user = auth.user_for_session(&session).await.unwrap().unwrap();
+    assert_eq!(user.email, "review@aqrgo.com");
+
+    // Everyone else still gets an emailed code.
+    auth.request_code("nasser@example.com").await.unwrap();
+    assert_eq!(inbox.count(), 1);
 }

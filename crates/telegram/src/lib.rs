@@ -13,3 +13,12 @@ pub use bot::{Bot, Buttons, Incoming, Outbox};
 
 pub const SCHEMA: &str = "telegram";
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("./migrations");
+
+/// Deletes a user's unconfirmed drafts (their account is being deleted).
+pub async fn forget_owner(pool: &sqlx::PgPool, owner: i64) -> Result<(), sqlx::Error> {
+    sqlx::query("DELETE FROM telegram.drafts WHERE owner_id = $1")
+        .bind(owner)
+        .execute(pool)
+        .await?;
+    Ok(())
+}

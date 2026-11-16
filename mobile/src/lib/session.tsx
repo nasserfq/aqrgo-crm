@@ -19,6 +19,8 @@ type Session = {
   api: Api;
   signIn: (token: string, user: User) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Drops the saved sign-in without calling the server (the account is gone). */
+  forget: () => Promise<void>;
 };
 
 const SessionContext = createContext<Session | null>(null);
@@ -82,6 +84,7 @@ export function SessionProvider({ children, api: injected }: { children: ReactNo
       await api.logout().catch(() => {});
       await clear();
     },
+    forget: clear,
   };
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -68,6 +68,7 @@ function Screens() {
           <Stack.Screen name="index" options={{ title: 'العروض' }} />
           <Stack.Screen name="listings/new" options={{ title: 'إضافة عرض', presentation: 'modal' }} />
           <Stack.Screen name="listings/[id]" options={{ title: 'تعديل العرض' }} />
+          <Stack.Screen name="account" options={{ title: 'حسابي' }} />
         </Stack.Protected>
       </Stack>
     </>
