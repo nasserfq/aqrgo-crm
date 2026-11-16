@@ -23,6 +23,8 @@ pub struct Config {
     /// Optional: only if "enhanced push security" is on in the Expo account.
     pub expo_access_token: Option<String>,
     pub typesafe_model: Option<String>,
+    /// Sentry error reporting (off without SENTRY_DSN).
+    pub sentry: crate::telemetry::SentryConfig,
     /// Use AWS (SES/Bedrock). Off in local development without credentials.
     pub aws_enabled: bool,
 }
@@ -104,6 +106,7 @@ impl Config {
             typesafe_api_key: opt("TYPESAFE_API_KEY"),
             expo_access_token: opt("EXPO_ACCESS_TOKEN"),
             typesafe_model: opt("TYPESAFE_MODEL"),
+            sentry: crate::telemetry::SentryConfig::from_env(opt)?,
             aws_enabled: opt("AWS_REGION").is_some(),
         })
     }

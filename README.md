@@ -66,6 +66,7 @@ Every push to `main` runs the tests, builds the Docker image on GitHub, pushes i
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Optional Google sign-in |
 | `TYPESAFE_API_KEY` | Optional TypeSafe Jev key: skips messages that aren't leads and reads الحالة from the message |
 | `AWS_BEARER_TOKEN_BEDROCK` | Optional Bedrock API key. Each deploy writes it into the server `.env` |
+| `SENTRY_DSN` | Optional Sentry project DSN for error reports. Each deploy writes it into the server `.env` |
 
 Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment called `production` if you want to approve each deploy.
 
@@ -75,6 +76,7 @@ Optional variable `DEPLOY_DIR` (default `/opt/aqrgo-crm`). Create an environment
 - **Google sign-in** (optional): Google Cloud Console → APIs & Services → Credentials → OAuth client (Web). Redirect URI: `https://aqrgo.com/auth/google/callback`.
 - **Telegram**: create a bot with @BotFather, paste the token, and set `TELEGRAM_WEBHOOK_SECRET` to a random string. The app registers its webhook on startup.
 - **WhatsApp**: Meta WhatsApp Cloud API, direct. Step by step in [`docs/whatsapp-setup.md`](docs/whatsapp-setup.md).
+- **Sentry** (optional): create a Rust project on sentry.io and save its DSN as the `SENTRY_DSN` secret. Panics and error logs are reported, warnings ride along as breadcrumbs, and each issue is tagged with the deployed commit. Info logs, cookies, IP addresses and query strings are never sent.
 
 **Agent websites** (موقعي): every user can publish a one-page site at `https://<name>.aqrgo.com` (old `aqrgo.com/s/<name>` links redirect there). It shows only available listings and never buyer, seller, broker, plot number, income or notes. DNS is a wildcard `*.aqrgo.com` A record on Cloudflare, **proxied**, with a configuration rule setting SSL to Flexible for those hosts: Cloudflare serves HTTPS and reaches the server over HTTP, where a catch-all kamal-proxy service `aqrgo-sites` sends them to the app. (The server's kamal-proxy is too old for `--tls-on-demand-url`; once it is upgraded, `/sites/tls-check?host=` is ready to approve per-site certificates and custom domains.)
 
