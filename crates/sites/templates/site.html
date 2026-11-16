@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ site.company_name }}{% if !site.tagline.is_empty() %} · {{ site.tagline }}{% endif %}</title>
+<meta name="description" content="{% if !site.about.is_empty() %}{{ site.about }}{% else %}{{ site.company_name }}{% endif %}">
+<meta property="og:title" content="{{ site.company_name }}">
+<meta property="og:type" content="website">
+{% if site.has_logo %}<link rel="icon" href="/logo">{% endif %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alexandria:wght@500;700;800&family=IBM+Plex+Sans+Arabic:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --accent: {{ site.accent }};
+  --bg: #fbfaf8;
+  --surface: #ffffff;
+  --ink: #17151c;
+  --muted: #66616f;
+  --line: #e8e4ec;
+  --soft: color-mix(in srgb, var(--accent) 9%, var(--bg));
+  --deep: color-mix(in srgb, var(--accent) 70%, #000);
+  --display: "Alexandria", "IBM Plex Sans Arabic", Tahoma, sans-serif;
+  font-family: "IBM Plex Sans Arabic", "Segoe UI", Tahoma, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121015; --surface: #1b1820; --ink: #f2eff6; --muted: #a59fb0; --line: #2e2a35;
+    --soft: color-mix(in srgb, var(--accent) 16%, var(--bg));
+    --deep: color-mix(in srgb, var(--accent) 55%, #fff);
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-size: 16px; line-height: 1.7; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+h1, h2, h3, .brand { font-family: var(--display); letter-spacing: -.01em; line-height: 1.25; }
+
+header.top { position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+header.top .wrap { display: flex; align-items: center; gap: 20px; min-height: 68px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.1rem; text-decoration: none; }
+.brand img, .brand .initial { width: 40px; height: 40px; border-radius: 10px; object-fit: contain; flex: none; }
+.brand .initial { display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 1.2rem; }
+header.top nav { display: flex; gap: 4px; margin-inline-start: auto; }
+header.top nav a { padding: 6px 12px; text-decoration: none; color: var(--muted); font-weight: 500; border-radius: 8px; }
+header.top nav a:hover { color: var(--ink); background: var(--soft); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 22px; border-radius: 12px; font: 600 1rem/1 inherit; font-family: inherit; text-decoration: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); transition: transform .15s ease, background .2s ease; }
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.wa { background: #1fa855; border-color: #1fa855; color: #fff; }
+.btn svg { width: 20px; height: 20px; flex: none; }
+
+.hero { padding: clamp(56px, 10vw, 120px) 0 clamp(48px, 8vw, 96px); background: radial-gradient(120% 90% at 85% 0%, var(--soft), transparent 60%); }
+.hero .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--deep); font-weight: 600; font-size: .9rem; }
+.hero h1 { font-size: clamp(2.1rem, 5.6vw, 4rem); font-weight: 800; margin: 20px 0 14px; max-width: 18ch; }
+.hero p.lead { font-size: clamp(1.05rem, 1.8vw, 1.25rem); color: var(--muted); max-width: 52ch; margin: 0 0 30px; }
+.hero .actions { display: flex; flex-wrap: wrap; gap: 12px; }
+
+section.block { padding: clamp(48px, 8vw, 88px) 0; border-top: 1px solid var(--line); }
+section.block h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); margin: 0 0 8px; }
+section.block .sub { color: var(--muted); margin: 0 0 32px; max-width: 60ch; }
+.about p { white-space: pre-line; font-size: 1.1rem; max-width: 70ch; margin: 0; }
+
+.services { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; list-style: none; padding: 0; margin: 0; }
+.services li { padding: 22px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); font-weight: 600; display: flex; gap: 14px; align-items: flex-start; }
+.services li::before { content: ""; width: 10px; height: 10px; margin-top: .55em; border-radius: 3px; background: var(--accent); flex: none; }
+
+.props { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.prop { display: flex; flex-direction: column; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.prop .band { height: 8px; background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 40%, var(--bg))); }
+.prop .body { padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.prop .type { align-self: flex-start; font-size: .85rem; font-weight: 600; color: var(--deep); background: var(--soft); padding: 2px 10px; border-radius: 999px; }
+.prop h3 { margin: 0; font-size: 1.2rem; }
+.prop .price { font-family: var(--display); font-weight: 700; font-size: 1.3rem; color: var(--deep); }
+.prop dl { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; color: var(--muted); font-size: .95rem; }
+.prop dl div { display: flex; gap: 6px; }
+.prop dt { font-weight: 500; }
+.prop dd { margin: 0; color: var(--ink); }
+.prop .ask { margin-top: auto; padding-top: 8px; }
+.prop .ask a { font-weight: 600; color: var(--deep); text-decoration: none; }
+.empty { color: var(--muted); }
+
+.license { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 28px; padding: 28px; border-radius: 20px; background: var(--soft); }
+.license .seal { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; flex: none; }
+.license .seal svg { width: 30px; height: 30px; }
+.license strong { display: block; font-family: var(--display); font-size: 1.15rem; }
+.license .num { font-family: var(--display); font-size: 1.5rem; font-weight: 700; letter-spacing: .04em; direction: ltr; unicode-bidi: isolate; }
+
+.contact { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.contact a, .contact div { display: flex; flex-direction: column; gap: 4px; padding: 20px 22px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface); text-decoration: none; }
+.contact span { color: var(--muted); font-size: .9rem; }
+.contact b { font-weight: 600; overflow-wrap: anywhere; }
+
+footer { padding: 32px 0 96px; color: var(--muted); font-size: .9rem; border-top: 1px solid var(--line); }
+footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+footer a { color: var(--muted); }
+
+.float-wa { position: fixed; inset-inline-start: 18px; bottom: 18px; z-index: 6; width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; background: #1fa855; color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.18); }
+.float-wa svg { width: 30px; height: 30px; }
+
+.reveal { animation: rise .7s cubic-bezier(.23,1,.32,1) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .reveal { animation: none; } html { scroll-behavior: auto; } }
+@media (max-width: 720px) {
+  header.top nav { display: none; }
+  header.top .btn { margin-inline-start: auto; min-height: 40px; padding: 0 14px; }
+  .hero .actions .btn { flex: 1 1 100%; }
+}
+@media (hover: hover) { .btn:hover { transform: translateY(-1px); } }
+</style>
+</head>
+<body>
+{% let wa = site.whatsapp_link() %}
+{% let tel = site.phone_link() %}
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#">
+      {% if site.has_logo %}<img src="/logo" alt="">{% else %}<span class="initial">{{ self.initials() }}</span>{% endif %}
+      {{ site.company_name }}
+    </a>
+    <nav>
+      {% if !site.about.is_empty() %}<a href="#about">من نحن</a>{% endif %}
+      {% if !site.services().is_empty() %}<a href="#services">خدماتنا</a>{% endif %}
+      <a href="#properties">العقارات</a>
+      <a href="#contact">تواصل معنا</a>
+    </nav>
+    {% if let Some(link) = tel %}<a class="btn primary" href="{{ link }}">اتصل الآن</a>{% endif %}
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap reveal">
+    {% if !site.license_no.is_empty() %}<span class="eyebrow">وسيط عقاري مرخّص · فال <span dir="ltr">{{ site.license_no }}</span></span>{% endif %}
+    <h1>{% if !site.tagline.is_empty() %}{{ site.tagline }}{% else %}{{ site.company_name }}{% endif %}</h1>
+    <p class="lead">{% if !site.tagline.is_empty() %}{{ site.company_name }}. {% endif %}نساعدك في البيع والشراء والتأجير بثقة ووضوح، من أول اتصال حتى توقيع العقد.</p>
+    <div class="actions">
+      {% if let Some(link) = wa %}<a class="btn wa" href="{{ link }}" target="_blank" rel="noopener">{% include "wa_icon.html" %}راسلنا على واتساب</a>{% endif %}
+      <a class="btn" href="#properties">تصفح العقارات</a>
+    </div>
+  </div>
+</section>
+
+{% if !site.about.is_empty() %}
+<section class="block about" id="about">
+  <div class="wrap">
+    <h2>من نحن</h2>
+    <p>{{ site.about }}</p>
+  </div>
+</section>
+{% endif %}
+
+{% if !site.services().is_empty() %}
+<section class="block" id="services">
+  <div class="wrap">
+    <h2>خدماتنا</h2>
+    <p class="sub">ما نقدمه لعملائنا من بداية الطلب حتى إتمام الصفقة.</p>
+    <ul class="services">
+      {% for service in site.services() %}<li>{{ service }}</li>{% endfor %}
+    </ul>
+  </div>
+</section>
+{% endif %}
+
+<section class="block" id="properties">
+  <div class="wrap">
+    <h2>العقارات المتاحة</h2>
+    <p class="sub">عروض متاحة الآن. تواصل معنا لمعرفة التفاصيل أو لترتيب معاينة.</p>
+    {% if listings.is_empty() %}
+    <p class="empty">لا توجد عروض منشورة حالياً. تواصل معنا وسنجد لك ما تبحث عنه.</p>
+    {% else %}
+    <div class="props">
+      {% for p in listings %}
+      <article class="prop">
+        <div class="band"></div>
+        <div class="body">
+          {% if !p.offer_type.is_empty() %}<span class="type">{{ p.offer_type }}</span>{% endif %}
+          <h3>{% if !p.location.is_empty() %}{{ p.location }}{% else %}{{ p.offer_type }}{% endif %}</h3>
+          {% if !p.price.is_empty() %}<div class="price">{{ p.price }}</div>{% endif %}
+          <dl>
+            {% if !p.area.is_empty() %}<div><dt>المساحة</dt><dd>{{ p.area }}</dd></div>{% endif %}
+            {% if !p.rooms.is_empty() %}<div><dt>الغرف</dt><dd>{{ p.rooms }}</dd></div>{% endif %}
+            {% if !p.bathrooms.is_empty() %}<div><dt>دورات المياه</dt><dd>{{ p.bathrooms }}</dd></div>{% endif %}
+            {% if !p.floors.is_empty() %}<div><dt>الأدوار</dt><dd>{{ p.floors }}</dd></div>{% endif %}
+            {% if !p.frontages.is_empty() %}<div><dt>الواجهة</dt><dd>{{ p.frontages }}</dd></div>{% endif %}
+          </dl>
+          {% if let Some(link) = wa %}<div class="ask"><a href="{{ link }}" target="_blank" rel="noopener">اسأل عن هذا العرض ←</a></div>{% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{% if !site.license_no.is_empty() %}
+<section class="block">
+  <div class="wrap">
+    <div class="license">
+      <span class="seal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.5-7 10-4-1.5-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      <div>
+        <strong>وسيط عقاري مرخّص من الهيئة العامة للعقار</strong>
+        <span class="muted">رقم رخصة فال</span>
+      </div>
+      <span class="num">{{ site.license_no }}</span>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<section class="block" id="contact">
+  <div class="wrap">
+    <h2>تواصل معنا</h2>
+    <p class="sub">يسعدنا خدمتك. اختر الطريقة الأنسب لك.</p>
+    <div class="contact">
+      {% if let Some(link) = wa %}<a href="{{ link }}" target="_blank" rel="noopener"><span>واتساب</span><b dir="ltr">{{ site.whatsapp }}</b></a>{% endif %}
+      {% if let Some(link) = tel %}<a href="{{ link }}"><span>اتصال</span><b dir="ltr">{{ site.phone }}</b></a>{% endif %}
+      {% if !site.email.is_empty() %}<a href="mailto:{{ site.email }}"><span>البريد الإلكتروني</span><b dir="ltr">{{ site.email }}</b></a>{% endif %}
+      {% if !site.address.is_empty() %}
+        {% if !site.map_url.is_empty() %}<a href="{{ site.map_url }}" target="_blank" rel="noopener"><span>العنوان · افتح الخريطة</span><b>{{ site.address }}</b></a>
+        {% else %}<div><span>العنوان</span><b>{{ site.address }}</b></div>{% endif %}
+      {% elif !site.map_url.is_empty() %}<a href="{{ site.map_url }}" target="_blank" rel="noopener"><span>الموقع</span><b>افتح الخريطة</b></a>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>© {{ site.company_name }}</span>
+    <span>الموقع من <a href="https://aqrgo.com" rel="noopener">AQRGO</a></span>
+  </div>
+</footer>
+{% if let Some(link) = wa %}<a class="float-wa" href="{{ link }}" target="_blank" rel="noopener" aria-label="واتساب">{% include "wa_icon.html" %}</a>{% endif %}
+</body>
+</html>

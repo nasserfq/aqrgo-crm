@@ -11,11 +11,13 @@ path = "src/main.rs"
 [dependencies]
 common.workspace = true
 listings.workspace = true
+sites.workspace = true
 auth.workspace = true
 telegram.workspace = true
 jobs.workspace = true
 mailer.workspace = true
 ai.workspace = true
+push.workspace = true
 axum.workspace = true
 tokio.workspace = true
 sqlx.workspace = true
@@ -34,4 +36,5 @@ testkit.workspace = true
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 async-trait.workspace = true
+serde_json.workspace = true
 sentry = { workspace = true, features = ["test"] }

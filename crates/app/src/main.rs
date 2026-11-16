@@ -90,7 +90,7 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
         tg_api.as_ref().and(cfg.telegram_webhook_secret.clone()),
     );
 
-    // Background worker: emails + Telegram updates.
+    // Background worker: emails, phone notifications and Telegram updates.
     let ses = mailer::SesSender {
         client: aws.as_ref().filter(|_| cfg.mail_from.is_some()).map(|a| {
             let mut ses = aws_sdk_sesv2::config::Builder::from(a);
@@ -102,6 +102,11 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
         from: cfg.mail_from.clone().unwrap_or_default(),
     };
     let mut worker = mailer::register(jobs.worker(), ses);
+    worker = push::register(
+        worker,
+        modules.push.clone(),
+        Arc::new(push::ExpoSender::new(cfg.expo_access_token.clone())),
+    );
     if let Some(api) = tg_api.clone() {
         let extractor: Option<Arc<dyn ai::LeadExtractor>> = aws.as_ref().map(|a| {
             let model = cfg

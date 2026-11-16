@@ -18,6 +18,8 @@ pub struct Config {
     pub ses_region: Option<String>,
     /// TypeSafe Jev: typed judgments around Bedrock extraction (optional).
     pub typesafe_api_key: Option<String>,
+    /// Optional: only if "enhanced push security" is on in the Expo account.
+    pub expo_access_token: Option<String>,
     pub typesafe_model: Option<String>,
     /// Sentry error reporting (off without SENTRY_DSN).
     pub sentry: crate::telemetry::SentryConfig,
@@ -68,6 +70,7 @@ impl Config {
             bedrock_model_id: opt("BEDROCK_MODEL_ID"),
             ses_region: opt("SES_REGION"),
             typesafe_api_key: opt("TYPESAFE_API_KEY"),
+            expo_access_token: opt("EXPO_ACCESS_TOKEN"),
             typesafe_model: opt("TYPESAFE_MODEL"),
             sentry: crate::telemetry::SentryConfig::from_env(opt)?,
             aws_enabled: opt("AWS_REGION").is_some(),
