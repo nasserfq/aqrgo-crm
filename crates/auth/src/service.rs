@@ -146,6 +146,12 @@ pub struct AuthService {
     config: AuthConfig,
 }
 
+impl AuthService {
+    pub(crate) fn pool(&self) -> &PgPool {
+        &self.pool
+    }
+}
+
 fn sha256_hex(s: &str) -> String {
     hex::encode(Sha256::digest(s.as_bytes()))
 }

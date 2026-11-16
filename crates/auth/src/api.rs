@@ -137,7 +137,12 @@ struct GoogleRequest {
 /// Finishes Google sign-in for the app: trades the one-time code from the
 /// `aqrgo://auth?code=…` redirect, plus the app's verifier, for a token.
 async fn google(State(state): State<AuthWeb>, Json(r): Json<GoogleRequest>) -> Response {
-    let Some(token) = state.handoff.redeem(&r.code, &r.verifier) else {
+    let redeemed = match state.handoff.redeem(&r.code, &r.verifier).await {
+        Ok(t) => t,
+        Err(e) => return auth_error(AuthError::Db(e)),
+    };
+    let Some(token) = redeemed else {
+        tracing::warn!("google app handoff refused (unknown, used, expired or wrong verifier)");
         return error(
             StatusCode::UNAUTHORIZED,
             "تعذر الدخول عبر Google، حاول مرة أخرى",

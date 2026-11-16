@@ -74,9 +74,9 @@ pub struct AuthWeb {
 impl AuthWeb {
     pub fn new(service: AuthService, config: WebConfig) -> Self {
         Self {
+            handoff: AppHandoff::new(service.pool().clone()),
             service,
             config,
-            handoff: AppHandoff::default(),
             apple: AppleVerifier::new(APP_BUNDLE_ID, std::sync::Arc::new(AppleHttpKeys::default())),
             http: reqwest::Client::new(),
         }
@@ -448,10 +448,13 @@ async fn google_callback(
         .await;
     match (signed_in, app) {
         // The phone app gets a one-time code, never the token, in the redirect.
-        (Ok(token), Some(challenge)) => {
-            let code = s.handoff.issue(token, challenge);
-            (jar, Redirect::to(&format!("{APP_RETURN}?code={code}"))).into_response()
-        }
+        (Ok(token), Some(challenge)) => match s.handoff.issue(token, challenge).await {
+            Ok(code) => (jar, Redirect::to(&format!("{APP_RETURN}?code={code}"))).into_response(),
+            Err(e) => {
+                tracing::error!(error = %e, "google app handoff");
+                (jar, Redirect::to(&failed_to)).into_response()
+            }
+        },
         (Ok(token), None) => {
             (jar.add(session_cookie(&s.config, token)), Redirect::to("/")).into_response()
         }

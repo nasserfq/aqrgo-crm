@@ -419,3 +419,59 @@ async fn the_app_review_login_uses_a_fixed_code_and_sends_no_email() {
     auth.request_code("nasser@example.com").await.unwrap();
     assert_eq!(inbox.count(), 1);
 }
+
+mod app_handoff {
+    use auth::handoff::AppHandoff;
+    use sha2::{Digest, Sha256};
+
+    fn challenge(verifier: &str) -> String {
+        hex::encode(Sha256::digest(verifier.as_bytes()))
+    }
+
+    async fn pool() -> sqlx::PgPool {
+        let pool = testkit::fresh_pool().await;
+        common::db::migrate_module(&pool, auth::SCHEMA, &auth::MIGRATOR)
+            .await
+            .unwrap();
+        pool
+    }
+
+    #[tokio::test]
+    async fn a_code_survives_a_restart_and_works_once() {
+        let pool = pool().await;
+        let code = AppHandoff::new(pool.clone())
+            .issue("sess".into(), challenge("secret-verifier"))
+            .await
+            .unwrap();
+        // A new server process (after a deploy) still knows the code.
+        let after_restart = AppHandoff::new(pool);
+        assert_eq!(
+            after_restart
+                .redeem(&code, "secret-verifier")
+                .await
+                .unwrap()
+                .as_deref(),
+            Some("sess")
+        );
+        assert_eq!(
+            after_restart
+                .redeem(&code, "secret-verifier")
+                .await
+                .unwrap(),
+            None,
+            "one use only"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_wrong_verifier_burns_the_code() {
+        let h = AppHandoff::new(pool().await);
+        let code = h
+            .issue("sess".into(), challenge("secret-verifier"))
+            .await
+            .unwrap();
+        assert_eq!(h.redeem(&code, "guess").await.unwrap(), None);
+        assert_eq!(h.redeem(&code, "secret-verifier").await.unwrap(), None);
+        assert_eq!(h.redeem("nope", "secret-verifier").await.unwrap(), None);
+    }
+}

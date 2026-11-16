@@ -418,7 +418,12 @@ async fn the_app_signs_in_with_google_through_a_one_time_code() {
         .sign_in_verified_email("nasser@example.com", "Nasser")
         .await
         .unwrap();
-    let code = modules.auth_web.handoff.issue(session, challenge);
+    let code = modules
+        .auth_web
+        .handoff
+        .issue(session, challenge)
+        .await
+        .unwrap();
     let (status, body) = call(
         &app,
         Method::POST,
@@ -438,7 +443,12 @@ async fn the_app_signs_in_with_google_through_a_one_time_code() {
             .await
             .unwrap();
         let challenge = hex::encode(sha2::Sha256::digest(verifier.as_bytes()));
-        modules.auth_web.handoff.issue(session, challenge)
+        modules
+            .auth_web
+            .handoff
+            .issue(session, challenge)
+            .await
+            .unwrap()
     };
     let (status, body) = call(
         &app,
