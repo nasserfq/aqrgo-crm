@@ -210,7 +210,7 @@ pub fn router(m: &Modules) -> Router {
     // JSON API for the iOS and Android apps (bearer tokens, no cookies).
     let api = listings::api::router(m.listings.clone())
         .merge(push::api::router(m.push.clone()))
-        .merge(auth::api::account_router())
+        .merge(auth::api::account_router(m.auth_web.clone()))
         .merge(
             Router::new()
                 .route("/api/v1/me", axum::routing::delete(delete_account))

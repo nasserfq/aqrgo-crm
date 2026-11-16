@@ -4,18 +4,21 @@
 //! same allow-list check), so signing out on the web and in the app behave alike.
 
 use axum::{
-    extract::{Request, State},
+    extract::{Path, Request, State},
     http::{header, HeaderMap, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
     Extension, Json, Router,
 };
 use common::CurrentUser;
 use serde::Deserialize;
 use serde_json::json;
 
-use crate::{web::AuthWeb, AuthError};
+use crate::{
+    web::{telegram_link_url, whatsapp_link_url, AuthWeb},
+    AuthError, Channel,
+};
 
 /// A JSON error body: `{"error": "<Arabic message>"}`.
 pub fn error(status: StatusCode, message: impl Into<String>) -> Response {
@@ -63,8 +66,13 @@ pub fn public_router(state: AuthWeb) -> Router {
 }
 
 /// Routes that need a token (wrap with [`require_token`]).
-pub fn account_router() -> Router {
-    Router::new().route("/api/v1/me", get(me))
+pub fn account_router(state: AuthWeb) -> Router {
+    Router::new()
+        .route("/api/v1/me", get(me))
+        .route("/api/v1/channels", get(channels))
+        .route("/api/v1/channels/{channel}/link", post(link_channel))
+        .route("/api/v1/channels/{channel}", delete(unlink_channel))
+        .with_state(state)
 }
 
 /// Middleware: loads the user from the bearer token, or answers 401 JSON.
@@ -188,4 +196,87 @@ async fn logout(State(state): State<AuthWeb>, headers: HeaderMap) -> Response {
 
 async fn me(Extension(user): Extension<CurrentUser>) -> Json<CurrentUser> {
     Json(user)
+}
+
+/// The chat channel in a URL, if this server runs a bot for it.
+fn channel(state: &AuthWeb, name: &str) -> Option<Channel> {
+    match name {
+        "telegram" if state.config.telegram_bot.is_some() => Some(Channel::Telegram),
+        "whatsapp" if state.config.whatsapp_number.is_some() => Some(Channel::WhatsApp),
+        _ => None,
+    }
+}
+
+fn no_channel() -> Response {
+    error(StatusCode::NOT_FOUND, "هذه القناة غير متاحة")
+}
+
+/// Which chat bots this server runs, and which the user has linked.
+async fn channels(
+    State(state): State<AuthWeb>,
+    Extension(user): Extension<CurrentUser>,
+) -> Response {
+    let mut out = serde_json::Map::new();
+    for (name, ch, available) in [
+        (
+            "telegram",
+            Channel::Telegram,
+            state.config.telegram_bot.is_some(),
+        ),
+        (
+            "whatsapp",
+            Channel::WhatsApp,
+            state.config.whatsapp_number.is_some(),
+        ),
+    ] {
+        let linked = match state.service.linked(ch, user.id).await {
+            Ok(l) => l,
+            Err(e) => return auth_error(e),
+        };
+        out.insert(
+            name.into(),
+            json!({ "available": available, "linked": linked }),
+        );
+    }
+    Json(out).into_response()
+}
+
+/// A one-time link that opens the bot and ties that chat account to the user.
+async fn link_channel(
+    State(state): State<AuthWeb>,
+    Extension(user): Extension<CurrentUser>,
+    Path(name): Path<String>,
+) -> Response {
+    let Some(ch) = channel(&state, &name) else {
+        return no_channel();
+    };
+    let token = match state.service.create_link(user.id).await {
+        Ok(t) => t,
+        Err(e) => return auth_error(e),
+    };
+    let url = match ch {
+        Channel::Telegram => telegram_link_url(
+            state.config.telegram_bot.as_deref().unwrap_or_default(),
+            &token,
+        ),
+        Channel::WhatsApp => whatsapp_link_url(
+            state.config.whatsapp_number.as_deref().unwrap_or_default(),
+            &token,
+        ),
+    };
+    Json(json!({ "url": url })).into_response()
+}
+
+async fn unlink_channel(
+    State(state): State<AuthWeb>,
+    Extension(user): Extension<CurrentUser>,
+    Path(name): Path<String>,
+) -> Response {
+    let Some(ch) = channel(&state, &name) else {
+        return no_channel();
+    };
+    match state.service.unlink(ch, user.id).await {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => auth_error(e),
+    }
 }

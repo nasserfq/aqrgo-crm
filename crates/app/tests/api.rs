@@ -670,3 +670,124 @@ async fn the_app_pastes_a_lead_and_gets_draft_rows() {
     .await;
     assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
 }
+
+async fn app_with_bots() -> (Router, Inbox, app::Modules) {
+    let pool = testkit::fresh_pool().await;
+    app::migrate(&pool).await.unwrap();
+    let inbox = Inbox::default();
+    let web = auth::web::WebConfig {
+        public_url: "http://localhost".into(),
+        google: None,
+        telegram_bot: Some("aqrgo_crm_bot".into()),
+        whatsapp_number: Some("966500000000".into()),
+    };
+    let modules = app::Modules::new(
+        pool.clone(),
+        jobs::Jobs::new(pool),
+        Arc::new(inbox.clone()),
+        auth::AuthConfig::default(),
+        web,
+        None,
+        None,
+    );
+    (app::router(&modules), inbox, modules)
+}
+
+#[tokio::test]
+async fn the_app_links_telegram_and_whatsapp() {
+    let (app, inbox, modules) = app_with_bots().await;
+    let me = sign_in(&app, &inbox, "agent@example.com").await;
+
+    let (status, _) = call(&app, Method::GET, "/api/v1/channels", None, None).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, channels) = call(&app, Method::GET, "/api/v1/channels", Some(&me), None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        channels["telegram"],
+        json!({ "available": true, "linked": false })
+    );
+    assert_eq!(
+        channels["whatsapp"],
+        json!({ "available": true, "linked": false })
+    );
+
+    // Telegram: a deep link that opens the bot with a one-time start token.
+    let (status, link) = call(
+        &app,
+        Method::POST,
+        "/api/v1/channels/telegram/link",
+        Some(&me),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{link}");
+    let url = link["url"].as_str().unwrap();
+    let token = url
+        .strip_prefix("https://t.me/aqrgo_crm_bot?start=")
+        .expect(url);
+    modules
+        .auth_web
+        .service
+        .redeem_link(auth::Channel::Telegram, token, 42)
+        .await
+        .unwrap()
+        .expect("token links");
+    let (_, channels) = call(&app, Method::GET, "/api/v1/channels", Some(&me), None).await;
+    assert_eq!(channels["telegram"]["linked"], true);
+
+    // WhatsApp: a wa.me link that pre-fills "ربط <token>".
+    let (status, link) = call(
+        &app,
+        Method::POST,
+        "/api/v1/channels/whatsapp/link",
+        Some(&me),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(link["url"]
+        .as_str()
+        .unwrap()
+        .starts_with("https://wa.me/966500000000?text=%D8%B1%D8%A8%D8%B7%20"));
+
+    // Unlinking.
+    let (status, _) = call(
+        &app,
+        Method::DELETE,
+        "/api/v1/channels/telegram",
+        Some(&me),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let (_, channels) = call(&app, Method::GET, "/api/v1/channels", Some(&me), None).await;
+    assert_eq!(channels["telegram"]["linked"], false);
+
+    let (status, _) = call(
+        &app,
+        Method::POST,
+        "/api/v1/channels/fax/link",
+        Some(&me),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn channels_without_a_bot_are_unavailable() {
+    let (app, inbox) = app().await;
+    let me = sign_in(&app, &inbox, "agent@example.com").await;
+    let (_, channels) = call(&app, Method::GET, "/api/v1/channels", Some(&me), None).await;
+    assert_eq!(channels["telegram"]["available"], false);
+    let (status, _) = call(
+        &app,
+        Method::POST,
+        "/api/v1/channels/telegram/link",
+        Some(&me),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}

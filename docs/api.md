@@ -43,6 +43,17 @@ With the secrets `APP_REVIEW_EMAIL` and `APP_REVIEW_CODE` (10+ digits) set, that
 one email signs in with that fixed code and gets no email. Give both to Apple in
 App Store Connect → App Review Information.
 
+## Telegram and WhatsApp bots
+
+`GET /api/v1/channels` → `{"telegram": {"available", "linked"}, "whatsapp": {...}}`.
+`available` is false when this server runs no bot for that channel.
+
+`POST /api/v1/channels/{telegram|whatsapp}/link` → `{"url"}`: a one-time link
+(`https://t.me/<bot>?start=<token>`, or `https://wa.me/<number>?text=ربط <token>`)
+that the app opens; the bot ties that chat to the account. Same tokens as the
+web account page. `DELETE /api/v1/channels/{channel}` → `204` unlinks. An
+unknown or unavailable channel answers `404`.
+
 ## Listings
 
 | Call | Answer |

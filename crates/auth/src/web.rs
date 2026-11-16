@@ -507,6 +507,17 @@ impl AuthWeb {
     }
 }
 
+/// Opens the Telegram bot with a one-time link token.
+pub(crate) fn telegram_link_url(bot: &str, token: &str) -> String {
+    format!("https://t.me/{bot}?start={token}")
+}
+
+/// Opens a WhatsApp chat with the business number, pre-filling "ربط <token>".
+pub(crate) fn whatsapp_link_url(number: &str, token: &str) -> String {
+    let text = url_encode(&format!("ربط {token}"));
+    format!("https://wa.me/{number}?text={text}")
+}
+
 /// Percent-encodes everything but ASCII letters and digits (for URL queries).
 fn url_encode(s: &str) -> String {
     s.bytes()
@@ -537,7 +548,7 @@ async fn telegram_link(
     match s.service.create_link(user.id).await {
         Ok(token) => {
             let mut page = s.account(user).await;
-            page.telegram_link_url = Some(format!("https://t.me/{bot}?start={token}"));
+            page.telegram_link_url = Some(telegram_link_url(&bot, &token));
             render(&page)
         }
         Err(e) => {
@@ -557,8 +568,7 @@ async fn whatsapp_link(
     match s.service.create_link(user.id).await {
         Ok(token) => {
             let mut page = s.account(user).await;
-            let text = url_encode(&format!("ربط {token}"));
-            page.whatsapp_link_url = Some(format!("https://wa.me/{number}?text={text}"));
+            page.whatsapp_link_url = Some(whatsapp_link_url(&number, &token));
             render(&page)
         }
         Err(e) => {

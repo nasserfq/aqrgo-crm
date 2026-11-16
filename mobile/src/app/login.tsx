@@ -127,10 +127,16 @@ export default function Login() {
               keyboardType="number-pad"
               textContentType="oneTimeCode"
               autoComplete="one-time-code"
-              maxLength={6}
+              // Real codes are 6 digits; App Review's demo account uses a longer one.
+              maxLength={16}
               autoFocus
               onSubmitEditing={verify}
-              style={{ fontSize: 26, letterSpacing: 10, textAlign: 'center', fontFamily: fonts.display }}
+              style={{
+                fontSize: 26,
+                letterSpacing: code.length > 6 ? 2 : 10,
+                textAlign: 'center',
+                fontFamily: fonts.display,
+              }}
             />
             <Button testID="verify" label="دخول" onPress={verify} busy={busy} disabled={code.length < 6} />
             <Button label="تغيير البريد" kind="outline" onPress={() => setStep('email')} />
