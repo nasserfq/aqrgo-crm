@@ -39,3 +39,33 @@ async fn probe_sample_messages() {
         }
     }
 }
+
+/// Jev's view of words Bedrock may have miscopied. The first two are real
+/// slips (Nova wrote أرد and العارد); the last is a deliberate plural.
+#[tokio::test]
+#[ignore]
+async fn probe_slips() {
+    use ai::faithful::Suspect;
+    let key = std::env::var("TYPESAFE_API_KEY").expect("set TYPESAFE_API_KEY");
+    let jev = JevClient::new(key, DEFAULT_MODEL.into());
+    let s = |field, written: &str, original: &str| Suspect {
+        row: 0,
+        field,
+        written: written.into(),
+        original: original.into(),
+    };
+    let text = "أرض للبيع في حي العارض شارع 20 والسعر على السوم";
+    let suspects = [
+        s("offer_type", "أرد", "أرض"),
+        s("location", "العارد", "العارض"),
+        s("frontages", "شوارع", "شارع"),
+    ];
+    match jev.confirm_slips(text, &suspects).await {
+        Ok(p) => {
+            for (s, p) in suspects.iter().zip(p) {
+                println!("slip={p:.2} {} -> {}", s.written, s.original);
+            }
+        }
+        Err(e) => println!("ERROR {e}"),
+    }
+}

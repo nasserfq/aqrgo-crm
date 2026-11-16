@@ -154,7 +154,7 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
                 let judge = Arc::new(ai::jev::JevClient::new(key, jev_model));
                 Arc::new(ai::jev::JudgedExtractor::new(bedrock, judge)) as _
             }
-            None => bedrock,
+            None => Arc::new(ai::faithful::SpellingGuard::new(bedrock)) as _,
         }
     });
     modules.extractor = extractor.clone();
