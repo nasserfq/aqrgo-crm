@@ -646,3 +646,10 @@ input[type=file]::file-selector-button { font: inherit; font-weight: 600; margin
   .b-cards { grid-template-columns: 1fr; }
 }
 @media print { .table-tip, .skip { display: none !important; } }
+
+/* Long-form pages (privacy policy). */
+.prose { max-width: 44rem; margin: 2.5rem auto; padding: 0 1rem 4rem; line-height: 1.9; }
+.prose h1 { font-size: 2rem; margin: 1.5rem 0 .25rem; }
+.prose h2 { font-size: 1.2rem; margin: 2rem 0 .5rem; }
+.prose ul { padding-inline-start: 1.25rem; }
+.prose li { margin: .35rem 0; }

@@ -49,6 +49,17 @@ pub struct WebConfig {
 }
 
 impl WebConfig {
+    /// Where people write about privacy or support: support@<site host>.
+    pub fn contact_email(&self) -> String {
+        let host = self
+            .public_url
+            .split("://")
+            .nth(1)
+            .unwrap_or(&self.public_url)
+            .trim_end_matches('/');
+        format!("support@{host}")
+    }
+
     fn secure(&self) -> bool {
         self.public_url.starts_with("https://")
     }
@@ -84,6 +95,7 @@ pub fn public_router(state: AuthWeb) -> Router {
         .route("/auth/google", get(google_start))
         .route("/auth/google/callback", get(google_callback))
         .route("/auth/logout", post(logout))
+        .route("/privacy", get(privacy_page))
         .with_state(state)
 }
 
@@ -143,6 +155,19 @@ fn session_cookie(config: &WebConfig, token: String) -> Cookie<'static> {
 
 fn time_days(d: i64) -> time::Duration {
     time::Duration::days(d)
+}
+
+/// The privacy policy (linked from the App Store listing and the footer).
+#[derive(Template)]
+#[template(path = "privacy.html")]
+struct PrivacyPage {
+    contact: String,
+}
+
+async fn privacy_page(State(s): State<AuthWeb>) -> Response {
+    render(&PrivacyPage {
+        contact: s.config.contact_email(),
+    })
 }
 
 /// The public front page, shown at `/` to visitors who are not signed in.
