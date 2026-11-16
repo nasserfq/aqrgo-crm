@@ -37,6 +37,9 @@ pub struct GoogleConfig {
     pub client_secret: String,
 }
 
+/// The privacy and support inbox shown on the site and in the app.
+pub const CONTACT_EMAIL: &str = "nafa050@gmail.com";
+
 #[derive(Clone, Debug)]
 pub struct WebConfig {
     /// e.g. https://aqrgo.com (no trailing slash)
@@ -49,15 +52,9 @@ pub struct WebConfig {
 }
 
 impl WebConfig {
-    /// Where people write about privacy or support: support@<site host>.
+    /// Where people write about privacy or support (Nasser's choice, 2026-11-16).
     pub fn contact_email(&self) -> String {
-        let host = self
-            .public_url
-            .split("://")
-            .nth(1)
-            .unwrap_or(&self.public_url)
-            .trim_end_matches('/');
-        format!("support@{host}")
+        CONTACT_EMAIL.to_string()
     }
 
     fn secure(&self) -> bool {
