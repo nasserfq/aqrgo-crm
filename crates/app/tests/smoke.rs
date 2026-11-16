@@ -420,6 +420,6 @@ async fn the_privacy_policy_is_public() {
     let (status, _, _, html) = call(&app, get("/privacy", None)).await;
     assert_eq!(status, StatusCode::OK);
     assert!(html.contains("سياسة الخصوصية"));
-    assert!(html.contains("support@localhost"));
+    assert!(html.contains("nafa050@gmail.com"));
     assert!(html.contains("حذف الحساب"));
 }
