@@ -182,7 +182,13 @@ impl Worker {
             }
             Err(err) => {
                 let give_up = job.attempts >= job.max_attempts;
-                tracing::warn!(job = job.id, kind = %job.kind, attempt = job.attempts, give_up, error = %err, "job failed");
+                // A job that has used up its retries is an error worth reporting;
+                // earlier attempts are only warnings.
+                if give_up {
+                    tracing::error!(job = job.id, kind = %job.kind, attempt = job.attempts, error = %err, "job failed for good");
+                } else {
+                    tracing::warn!(job = job.id, kind = %job.kind, attempt = job.attempts, error = %err, "job failed, will retry");
+                }
                 sqlx::query(
                     "UPDATE jobs.jobs SET
                         status = CASE WHEN $2 THEN 'failed' ELSE 'queued' END,

@@ -6,6 +6,7 @@ use axum::{http::header, middleware, response::IntoResponse, routing::get, Route
 use sqlx::PgPool;
 
 pub mod config;
+pub mod telemetry;
 
 pub use config::Config;
 
@@ -148,4 +149,10 @@ pub fn router(m: &Modules) -> Router {
         sites::web::subdomain,
     ))
     .layer(tower_http::trace::TraceLayer::new_for_http())
+    // Sentry: one hub per request (so breadcrumbs don't mix between users)
+    // and the request's method, route and safe headers on each error.
+    .layer(sentry::integrations::tower::SentryHttpLayer::new())
+    .layer(sentry::integrations::tower::NewSentryLayer::<
+        axum::extract::Request,
+    >::new_from_top())
 }
