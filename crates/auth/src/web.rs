@@ -137,7 +137,7 @@ fn session_cookie(config: &WebConfig, token: String) -> Cookie<'static> {
         .http_only(true)
         .secure(config.secure())
         .same_site(SameSite::Lax)
-        .max_age(time_days(30))
+        .max_age(time_days(crate::SESSION_DAYS.into()))
         .build()
 }
 

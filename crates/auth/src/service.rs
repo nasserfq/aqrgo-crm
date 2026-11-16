@@ -10,7 +10,8 @@ use subtle::ConstantTimeEq;
 const CODE_TTL_MINUTES: i32 = 10;
 const MAX_ATTEMPTS: i32 = 5;
 const MAX_CODES_PER_HOUR: i64 = 5;
-const SESSION_DAYS: i32 = 30;
+/// Sessions renew on use, so this is how long one may sit unused.
+pub const SESSION_DAYS: i32 = 365;
 const LINK_MINUTES: i32 = 15;
 
 /// A chat app a user can link one account of, to send leads from.

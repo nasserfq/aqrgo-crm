@@ -12,7 +12,7 @@ pages, so each user only ever sees and changes their own rows.
    `{"token": "...", "user": {"id", "email", "name"}}`. Arabic digits are fine.
 3. Send `Authorization: Bearer <token>` on every other call. The app keeps the
    token in the phone's secure storage (Keychain / Keystore). Tokens are
-   ordinary sessions: 30 days, and removed from `ALLOWED_EMAILS` means signed out.
+   ordinary sessions: they renew on use and end after 365 unused days or on sign-out, and removed from `ALLOWED_EMAILS` means signed out.
 4. `POST /api/v1/auth/logout` (with the token) → `204`.
 
 `GET /api/v1/me` → the signed-in user. A missing or expired token gives `401`.

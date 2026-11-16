@@ -363,21 +363,24 @@ async fn a_session_in_use_stays_signed_in_until_sign_out() {
         .await
         .unwrap();
 
-    // Pretend the session was made 29 days ago: one day left.
+    // Pretend the session was made long ago: one day left.
     sqlx::query("UPDATE auth.sessions SET expires_at = now() + interval '1 day'")
         .execute(&pool)
         .await
         .unwrap();
     assert!(auth.user_for_session(&session).await.unwrap().is_some());
 
-    // Using it pushed the expiry a full 30 days out again.
+    // Using it pushed the expiry a full SESSION_DAYS out again.
     let left: f64 = sqlx::query_scalar(
         "SELECT extract(epoch FROM expires_at - now())::float8 / 86400 FROM auth.sessions",
     )
     .fetch_one(&pool)
     .await
     .unwrap();
-    assert!(left > 29.9, "expiry slid forward, {left} days left");
+    assert!(
+        left > f64::from(auth::SESSION_DAYS) - 0.1,
+        "expiry slid forward, {left} days left"
+    );
 
     // A session left unused past its expiry is gone.
     sqlx::query("UPDATE auth.sessions SET expires_at = now() - interval '1 minute'")
