@@ -59,7 +59,10 @@
     ],
     "scheme": "aqrgo",
     "extra": {
-      "apiUrl": "https://aqrgo.com"
+      "apiUrl": "https://aqrgo.com",
+      "eas": {
+        "projectId": "163adc99-3b8d-491f-91fe-3f0ffdde48e2"
+      }
     }
   }
 }
