@@ -15,7 +15,14 @@ use common::{ui::Nav, CurrentUser};
 use rand::{distributions::Alphanumeric, Rng};
 use serde::Deserialize;
 
-use crate::{handoff::AppHandoff, AuthError, AuthService, Channel};
+use crate::{
+    apple::{AppleHttpKeys, AppleVerifier},
+    handoff::AppHandoff,
+    AuthError, AuthService, Channel,
+};
+
+/// The iOS app's bundle id: the audience of its Sign in with Apple tokens.
+pub const APP_BUNDLE_ID: &str = "com.aqrgo.app";
 
 pub const SESSION_COOKIE: &str = "aqrgo_session";
 const STATE_COOKIE: &str = "aqrgo_oauth_state";
@@ -52,6 +59,7 @@ pub struct AuthWeb {
     pub service: AuthService,
     pub config: WebConfig,
     pub handoff: AppHandoff,
+    pub apple: AppleVerifier,
     http: reqwest::Client,
 }
 
@@ -61,6 +69,7 @@ impl AuthWeb {
             service,
             config,
             handoff: AppHandoff::default(),
+            apple: AppleVerifier::new(APP_BUNDLE_ID, std::sync::Arc::new(AppleHttpKeys::default())),
             http: reqwest::Client::new(),
         }
     }

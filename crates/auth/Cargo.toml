@@ -21,6 +21,7 @@ hex.workspace = true
 subtle.workspace = true
 async-trait.workspace = true
 reqwest.workspace = true
+jsonwebtoken.workspace = true
 mailer.workspace = true
 time = "0.3"
 

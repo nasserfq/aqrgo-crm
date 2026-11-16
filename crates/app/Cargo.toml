@@ -41,3 +41,4 @@ serde_json.workspace = true
 sentry = { workspace = true, features = ["test"] }
 sha2.workspace = true
 hex.workspace = true
+jsonwebtoken.workspace = true

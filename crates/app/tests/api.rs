@@ -464,3 +464,80 @@ async fn google_is_hidden_from_the_app_when_not_set_up() {
     let (location, _) = redirect(&app, &format!("/auth/google?app={}", "a".repeat(64))).await;
     assert_eq!(location, "aqrgo://auth?error=google");
 }
+
+/// Apple's keys for tests: one key pair made just for these tests
+/// (fixtures/apple_test_key.pem); it signs nothing real.
+struct TestAppleKeys;
+
+#[async_trait::async_trait]
+impl auth::apple::AppleKeys for TestAppleKeys {
+    async fn keys(&self, _refresh: bool) -> Result<jsonwebtoken::jwk::JwkSet, String> {
+        Ok(serde_json::from_str(include_str!("fixtures/apple_test_jwks.json")).unwrap())
+    }
+}
+
+fn apple_token(aud: &str, email_verified: bool, exp_in_secs: i64) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+    header.kid = Some("test-key".into());
+    jsonwebtoken::encode(
+        &header,
+        &json!({
+            "iss": "https://appleid.apple.com",
+            "aud": aud,
+            "sub": "001234.abcd",
+            "iat": now,
+            "exp": now + exp_in_secs,
+            "email": "abc123@privaterelay.appleid.com",
+            "email_verified": if email_verified { json!("true") } else { json!("false") },
+        }),
+        &jsonwebtoken::EncodingKey::from_rsa_pem(include_bytes!("fixtures/apple_test_key.pem"))
+            .unwrap(),
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn the_app_signs_in_with_apple() {
+    let (_, mut modules) = app_with_google().await;
+    modules.auth_web.apple =
+        auth::apple::AppleVerifier::new("com.aqrgo.app", Arc::new(TestAppleKeys));
+    let app = app::router(&modules);
+
+    let refused = [
+        apple_token("com.someone.else", true, 600),
+        apple_token("com.aqrgo.app", false, 600),
+        apple_token("com.aqrgo.app", true, -600),
+        "not a token".to_string(),
+    ];
+    for token in refused {
+        let (status, body) = call(
+            &app,
+            Method::POST,
+            "/api/v1/auth/apple",
+            None,
+            Some(json!({ "identity_token": token })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{token}");
+        assert_eq!(body["error"], "تعذر الدخول عبر Apple، حاول مرة أخرى");
+    }
+
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/apple",
+        None,
+        Some(json!({ "identity_token": apple_token("com.aqrgo.app", true, 600), "name": "ناصر" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["user"]["email"], "abc123@privaterelay.appleid.com");
+    assert_eq!(body["user"]["name"], "ناصر");
+    let token = body["token"].as_str().unwrap();
+    let (status, _) = call(&app, Method::GET, "/api/v1/me", Some(token), None).await;
+    assert_eq!(status, StatusCode::OK);
+}
