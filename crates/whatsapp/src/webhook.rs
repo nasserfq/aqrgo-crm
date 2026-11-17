@@ -88,6 +88,15 @@ async fn receive(State(s): State<HookState>, headers: HeaderMap, body: Bytes) ->
     let Ok(update) = serde_json::from_slice::<Value>(&body) else {
         return StatusCode::OK;
     };
+    for f in delivery_failures(&update) {
+        tracing::error!(
+            message_id = %f.message_id,
+            code = ?f.code,
+            title = %f.title,
+            details = %f.details,
+            "whatsapp message was not delivered"
+        );
+    }
     for message in incoming_messages(&update) {
         let Some(id) = message["id"].as_str() else {
             continue;
@@ -118,6 +127,44 @@ async fn receive(State(s): State<HookState>, headers: HeaderMap, body: Bytes) ->
         }
     }
     StatusCode::OK
+}
+
+/// Why Meta could not deliver one of our messages. The recipient's number is
+/// left out so the log can be shown without exposing it.
+#[derive(Debug, PartialEq)]
+pub struct DeliveryFailure {
+    pub message_id: String,
+    pub code: Option<i64>,
+    pub title: String,
+    pub details: String,
+}
+
+/// The `failed` status updates in a webhook delivery.
+pub fn delivery_failures(update: &Value) -> Vec<DeliveryFailure> {
+    let mut out = Vec::new();
+    for entry in update["entry"].as_array().into_iter().flatten() {
+        for change in entry["changes"].as_array().into_iter().flatten() {
+            if change["field"] != "messages" {
+                continue;
+            }
+            for status in change["value"]["statuses"].as_array().into_iter().flatten() {
+                if status["status"] != "failed" {
+                    continue;
+                }
+                let error = &status["errors"][0];
+                out.push(DeliveryFailure {
+                    message_id: status["id"].as_str().unwrap_or_default().to_string(),
+                    code: error["code"].as_i64(),
+                    title: error["title"].as_str().unwrap_or_default().to_string(),
+                    details: error["error_data"]["details"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_string(),
+                });
+            }
+        }
+    }
+    out
 }
 
 /// The user messages in a webhook delivery (status updates are skipped).
@@ -231,6 +278,26 @@ mod tests {
 
         let sticker = to_incoming(&json!({ "from": "1", "id": "w", "type": "sticker" }));
         assert!(sticker.is_none());
+    }
+
+    #[test]
+    fn reports_failed_deliveries_without_the_recipient() {
+        let update = json!({ "entry": [{ "changes": [{ "field": "messages", "value": {
+            "statuses": [
+                { "id": "wamid.ok", "status": "delivered", "recipient_id": "966500000001" },
+                { "id": "wamid.bad", "status": "failed", "recipient_id": "966500000001",
+                  "errors": [{ "code": 131049, "title": "This message was not delivered to maintain healthy ecosystem engagement.",
+                               "error_data": { "details": "In order to maintain a healthy ecosystem engagement, the message failed to be delivered." } }] }
+            ]
+        } }] }] });
+        let failures = delivery_failures(&update);
+        assert_eq!(failures.len(), 1);
+        let f = &failures[0];
+        assert_eq!(f.message_id, "wamid.bad");
+        assert_eq!(f.code, Some(131049));
+        assert!(f.title.contains("healthy ecosystem"));
+        assert!(f.details.contains("failed to be delivered"));
+        assert!(!format!("{f:?}").contains("966500000001"));
     }
 
     #[test]
