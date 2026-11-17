@@ -1,0 +1,26 @@
+name: WhatsApp delivery errors
+
+# Prints the last day's "not delivered" reports from the server. This repo is
+# public, so only those lines are shown: they hold Meta's error, never a number.
+on:
+  workflow_dispatch:
+
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the app's log on the server
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aqrgo-crm' }}
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: DEPLOY_DIR
+          script: |
+            cd "$DEPLOY_DIR"
+            docker compose logs --no-color --since 24h app 2>&1 \
+              | grep "whatsapp message was not delivered" | tail -n 20 \
+              || echo "No delivery errors in the last 24 hours."
