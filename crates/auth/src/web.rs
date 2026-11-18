@@ -553,9 +553,10 @@ pub(crate) fn telegram_link_url(bot: &str, token: &str) -> String {
     format!("https://t.me/{bot}?start={token}")
 }
 
-/// Opens a WhatsApp chat with the business number, pre-filling "ربط <token>".
+/// Opens a WhatsApp chat with the business number, pre-filling
+/// "ربط حسابي في AQRGO: <code>".
 pub(crate) fn whatsapp_link_url(number: &str, token: &str) -> String {
-    let text = url_encode(&format!("ربط {token}"));
+    let text = url_encode(&format!("ربط حسابي في AQRGO: {token}"));
     format!("https://wa.me/{number}?text={text}")
 }
 

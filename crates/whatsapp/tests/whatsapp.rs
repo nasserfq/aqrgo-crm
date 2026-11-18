@@ -224,7 +224,8 @@ async fn unsigned_or_forged_deliveries_are_rejected_and_never_answered() {
 async fn a_linked_number_sends_a_lead_confirms_it_and_it_lands_in_the_table() {
     let w = world().await;
     let token = w.auth.create_link(w.owner).await.unwrap();
-    w.deliver(text("wamid.1", &format!("ربط {token}"))).await;
+    w.deliver(text("wamid.1", &format!("ربط حسابي في AQRGO: {token}")))
+        .await;
     assert!(w.last_body().contains("تم ربط"), "{}", w.last_body());
     assert_eq!(
         w.auth

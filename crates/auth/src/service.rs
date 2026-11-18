@@ -180,6 +180,25 @@ fn random_token() -> String {
         .collect()
 }
 
+/// Characters for link codes: no 0/O, 1/I/L look-alikes.
+const LINK_ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+
+fn link_code() -> String {
+    let mut rng = rand::thread_rng();
+    (0..8)
+        .map(|_| LINK_ALPHABET[rng.gen_range(0..LINK_ALPHABET.len())] as char)
+        .collect()
+}
+
+/// A link code as typed: case and dashes or spaces don't matter.
+fn normalize_link_code(typed: &str) -> String {
+    typed
+        .chars()
+        .filter(|c| !c.is_whitespace() && *c != '-')
+        .collect::<String>()
+        .to_uppercase()
+}
+
 fn normalize_email(raw: &str) -> Result<String, AuthError> {
     let e = raw.trim().to_lowercase();
     let valid = e.len() <= 254
@@ -444,15 +463,18 @@ impl AuthService {
         Ok(())
     }
 
-    /// One-time token that links a chat account to this user: the Telegram
-    /// deep link `t.me/<bot>?start=<token>`, or a WhatsApp message `ربط <token>`.
+    /// One-time code that links a chat account to this user: the Telegram
+    /// deep link `t.me/<bot>?start=<code>`, or the WhatsApp message
+    /// `ربط حسابي في AQRGO: <code>`. Short (`XXXX-XXXX`) so it reads well in
+    /// a chat; it expires in minutes and is single use.
     pub async fn create_link(&self, user_id: i64) -> Result<String, AuthError> {
-        let token = random_token()[..32].to_string();
+        let code = link_code();
+        let token = format!("{}-{}", &code[..4], &code[4..]);
         sqlx::query(
             "INSERT INTO auth.telegram_link_tokens (token_hash, user_id, expires_at)
              VALUES ($1, $2, now() + make_interval(mins => $3))",
         )
-        .bind(sha256_hex(&token))
+        .bind(sha256_hex(&code))
         .bind(user_id)
         .bind(LINK_MINUTES)
         .execute(&self.pool)
@@ -476,7 +498,7 @@ impl AuthService {
         let user_id: Option<i64> = sqlx::query_scalar(
             "DELETE FROM auth.telegram_link_tokens WHERE token_hash = $1 AND expires_at > now() RETURNING user_id",
         )
-        .bind(sha256_hex(token.trim()))
+        .bind(sha256_hex(&normalize_link_code(token)))
         .fetch_optional(&mut *tx)
         .await?;
         let Some(user_id) = user_id else {

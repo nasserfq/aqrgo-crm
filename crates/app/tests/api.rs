@@ -749,7 +749,7 @@ async fn the_app_links_telegram_and_whatsapp() {
     let (_, channels) = call(&app, Method::GET, "/api/v1/channels", Some(&me), None).await;
     assert_eq!(channels["telegram"]["linked"], true);
 
-    // WhatsApp: a wa.me link that pre-fills "ربط <token>".
+    // WhatsApp: a wa.me link that pre-fills "ربط حسابي في AQRGO: <code>".
     let (status, link) = call(
         &app,
         Method::POST,
@@ -762,7 +762,7 @@ async fn the_app_links_telegram_and_whatsapp() {
     assert!(link["url"]
         .as_str()
         .unwrap()
-        .starts_with("https://wa.me/966500000000?text=%D8%B1%D8%A8%D8%B7%20"));
+        .starts_with("https://wa.me/966500000000?text=%D8%B1%D8%A8%D8%B7%20%D8%AD%D8%B3%D8%A7%D8%A8%D9%8A%20%D9%81%D9%8A%20AQRGO%3A%20"));
 
     // Unlinking.
     let (status, _) = call(

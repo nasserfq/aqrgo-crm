@@ -187,9 +187,9 @@ async fn account_page_offers_a_whatsapp_link_that_prefills_the_link_message() {
     let (_, _, _, page) = call(&app, get("/account", Some(&me))).await;
     assert!(page.contains("ربط واتساب"), "{page}");
     let (_, _, _, page) = call(&app, form("/account/whatsapp", "", Some(&me))).await;
-    // "ربط " percent-encoded, then the one-time token.
+    // "ربط حسابي في AQRGO: " percent-encoded, then the one-time code.
     assert!(
-        page.contains("https://wa.me/966500000000?text=%D8%B1%D8%A8%D8%B7%20"),
+        page.contains("https://wa.me/966500000000?text=%D8%B1%D8%A8%D8%B7%20%D8%AD%D8%B3%D8%A7%D8%A8%D9%8A%20%D9%81%D9%8A%20AQRGO%3A%20"),
         "{page}"
     );
 }

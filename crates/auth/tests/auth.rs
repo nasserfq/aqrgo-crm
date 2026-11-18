@@ -188,6 +188,13 @@ async fn one_telegram_account_per_user_via_link_token() {
     let user = auth.user_for_session(&s).await.unwrap().unwrap();
 
     let token = auth.create_link(user.id).await.unwrap();
+    // A short code people can read: XXXX-XXXX, no look-alike characters.
+    assert_eq!(token.len(), 9, "{token}");
+    assert_eq!(&token[4..5], "-");
+    assert!(token
+        .chars()
+        .filter(|c| *c != '-')
+        .all(|c| "ABCDEFGHJKMNPQRSTUVWXYZ23456789".contains(c)));
     assert!(matches!(
         auth.redeem_link(Channel::Telegram, &token, 777).await.unwrap(),
         LinkOutcome::Linked(u) if u.id == user.id
@@ -243,8 +250,10 @@ async fn whatsapp_links_separately_from_telegram() {
 
     assert!(!auth.linked(Channel::WhatsApp, user.id).await.unwrap());
     let token = auth.create_link(user.id).await.unwrap();
+    // Typed by hand, the code still works in lower case or without the dash.
+    let typed = token.to_lowercase().replace('-', "");
     assert!(matches!(
-        auth.redeem_link(Channel::WhatsApp, &token, phone)
+        auth.redeem_link(Channel::WhatsApp, &typed, phone)
             .await
             .unwrap(),
         LinkOutcome::Linked(_)
