@@ -10,6 +10,7 @@ use listings::{ListingInput, Status};
 use serde_json::{json, Value};
 
 use crate::{
+    area,
     faithful::{self, Suspect},
     LeadExtractor,
 };
@@ -34,6 +35,9 @@ pub struct Judgments {
     pub mentions_status: f64,
     /// Most likely status, only meaningful when `mentions_status` is high.
     pub status: Status,
+    /// Each size-like span of the message ([`area::candidates`]) with the
+    /// probability that it is the property's size.
+    pub area: Vec<(String, f64)>,
 }
 
 #[async_trait::async_trait]
@@ -48,13 +52,14 @@ pub trait Judge: Send + Sync {
     }
 }
 
-/// The request sent to `POST /v1/systemone`.
+/// The request sent to `POST /v1/systemone`. The size questions are asked
+/// up front, before Bedrock runs, so they cost no extra call.
 pub fn request_body(model: &str, text: &str) -> Value {
-    json!({
+    let mut body = json!({
         "model": model,
         "state": {
             "message": text,
-            "context": "A message sent to the Telegram bot of a Saudi real estate office by a broker or agent. \
+            "context": "A message sent to the Telegram or WhatsApp bot of a Saudi real estate office by a broker or agent. \
                         Usually Gulf Arabic, often copied from WhatsApp."
         },
         "questions": {
@@ -88,7 +93,21 @@ pub fn request_body(model: &str, text: &str) -> Value {
                 }
             }
         }
-    })
+    });
+    for (i, candidate) in area::candidates(text).iter().enumerate() {
+        body["state"][format!("candidate_{i}")] = json!(candidate);
+        body["questions"][format!("is_area_{i}")] = json!({
+            "type": "noul",
+            "instructions": format!("Is `candidate_{i}` the size of the property in `message`?"),
+            "criteria": {
+                "true": format!("`candidate_{i}` is the land or floor area of the property being offered or sought, \
+                                 for example ٦٠٠ متر, مساحة 625م or 20×30."),
+                "false": format!("`candidate_{i}` measures something else, such as the width of a street next to it \
+                                  (شارع 20م), the length of a frontage, or a price.")
+            }
+        });
+    }
+    body
 }
 
 /// The request asking whether each suspect word is a copying slip.
@@ -134,8 +153,9 @@ fn noul(res: &Value, key: &str) -> Result<f64, String> {
         .ok_or_else(|| format!("Jev response has no answer for {key}"))
 }
 
-/// Reads Jev's answers. A missing answer is an error, never a "no".
-pub fn parse_answers(res: &Value) -> Result<Judgments, String> {
+/// Reads Jev's answers to [`request_body`] for `text`. A missing answer is
+/// an error, never a "no".
+pub fn parse_answers(res: &Value, text: &str) -> Result<Judgments, String> {
     let status = res
         .pointer("/answers/status/choice")
         .and_then(Value::as_str)
@@ -145,6 +165,11 @@ pub fn parse_answers(res: &Value) -> Result<Judgments, String> {
         is_lead: noul(res, "is_lead")?,
         mentions_status: noul(res, "mentions_status")?,
         status,
+        area: area::candidates(text)
+            .into_iter()
+            .enumerate()
+            .map(|(i, c)| Ok((c, noul(res, &format!("is_area_{i}"))?)))
+            .collect::<Result<_, String>>()?,
     })
 }
 
@@ -194,7 +219,7 @@ impl JevClient {
 #[async_trait::async_trait]
 impl Judge for JevClient {
     async fn judge(&self, text: &str) -> Result<Judgments, String> {
-        parse_answers(&self.ask(&request_body(&self.model, text)).await?)
+        parse_answers(&self.ask(&request_body(&self.model, text)).await?, text)
     }
 
     async fn confirm_slips(&self, text: &str, suspects: &[Suspect]) -> Result<Vec<f64>, String> {
@@ -240,10 +265,17 @@ impl LeadExtractor for JudgedExtractor {
             }
         }
         let mut rows = self.inner.extract(text, today).await?;
-        // A stated status only applies when the message holds one property.
+        for row in &mut rows {
+            row.area = area::clean(&row.area, &row.location);
+        }
+        // A stated status, or a size picked from the message, only applies
+        // when the message holds one property.
         if let (Some(j), [row]) = (&judgments, rows.as_mut_slice()) {
             if j.mentions_status > STATUS_STATED_ABOVE {
                 row.status = j.status;
+            }
+            if let Some(size) = area::choose(&j.area) {
+                row.area = size;
             }
         }
         let suspects = faithful::find_suspects(text, &rows);

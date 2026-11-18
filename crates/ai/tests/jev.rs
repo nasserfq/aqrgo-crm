@@ -61,6 +61,7 @@ fn j(is_lead: f64, mentions_status: f64, status: Status) -> Judgments {
         is_lead,
         mentions_status,
         status,
+        area: Vec::new(),
     }
 }
 
@@ -131,14 +132,77 @@ fn parses_answers() {
         },
         "usage": {"input_tokens": 120, "output_tokens": 3}
     });
-    let a = parse_answers(&res).unwrap();
+    let a = parse_answers(&res, "أرض للبيع").unwrap();
     assert_eq!(a, j(0.93, 0.81, Status::Reserved));
 }
 
 #[test]
 fn missing_answer_is_an_error_not_a_no() {
     let res = json!({"answers": {"is_lead": {"type": "noul", "noul": 0.9}}});
-    assert!(parse_answers(&res).is_err());
+    assert!(parse_answers(&res, "أرض للبيع").is_err());
+}
+
+// The lead from the first WhatsApp test: Bedrock put the district in المساحة.
+const MALQA: &str = "أرض للبيع في حي الملقا ٦٠٠ متر بسعر ٢ مليون";
+
+struct AreaBedrock;
+
+#[async_trait::async_trait]
+impl LeadExtractor for AreaBedrock {
+    async fn extract(&self, _text: &str, _today: NaiveDate) -> Result<Vec<ListingInput>, String> {
+        Ok(vec![ListingInput {
+            offer_type: "أرض للبيع".into(),
+            area: "الملقا 600 متر".into(),
+            location: "حي الملقا".into(),
+            ..Default::default()
+        }])
+    }
+}
+
+async fn area_run(area: Vec<(&str, f64)>) -> String {
+    let mut judgments = j(0.95, 0.1, Status::Available);
+    judgments.area = area.into_iter().map(|(c, p)| (c.to_string(), p)).collect();
+    let x = JudgedExtractor::new(Arc::new(AreaBedrock), Arc::new(FakeJudge(Ok(judgments))));
+    x.extract(MALQA, today()).await.unwrap().remove(0).area
+}
+
+#[tokio::test]
+async fn the_size_jev_picks_from_the_message_becomes_the_area() {
+    assert_eq!(area_run(vec![("٦٠٠ متر", 0.93)]).await, "600 متر");
+}
+
+#[tokio::test]
+async fn when_jev_is_unsure_the_area_is_cleaned_in_code() {
+    assert_eq!(area_run(vec![("٦٠٠ متر", 0.4)]).await, "600 متر");
+    assert_eq!(area_run(vec![]).await, "600 متر");
+}
+
+#[test]
+fn request_asks_about_each_size_in_the_message() {
+    let body = request_body("jev-1.14.0", "مساحة 625م شمالية شارع 20م");
+    assert_eq!(body["state"]["candidate_0"], "625م");
+    assert_eq!(body["state"]["candidate_1"], "20م");
+    assert_eq!(body["questions"]["is_area_0"]["type"], "noul");
+    assert_eq!(body["questions"]["is_area_1"]["type"], "noul");
+    assert!(body["questions"].get("is_area_2").is_none());
+    // No size in the message: no size questions, no candidates in the state.
+    let body = request_body("jev-1.14.0", "مطلوب فيلا");
+    assert!(body["questions"].get("is_area_0").is_none());
+    assert!(body["state"].get("candidate_0").is_none());
+}
+
+#[test]
+fn parses_size_answers_in_candidate_order() {
+    let res = json!({"answers": {
+        "is_lead": {"noul": 0.9}, "mentions_status": {"noul": 0.1},
+        "status": {"choice": "available"},
+        "is_area_0": {"noul": 0.92}, "is_area_1": {"noul": 0.05}
+    }});
+    let a = parse_answers(&res, "مساحة 625م شمالية شارع 20م").unwrap();
+    assert_eq!(
+        a.area,
+        vec![("625م".to_string(), 0.92), ("20م".to_string(), 0.05)]
+    );
 }
 
 // Bedrock copying "أرض … العارض" as "أرد … العارد".

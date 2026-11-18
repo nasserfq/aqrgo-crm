@@ -94,13 +94,13 @@ fn label(key: &str) -> &'static str {
         .unwrap_or("")
 }
 
-/// The token in a link message: Telegram's `/start <token>` deep link, or
-/// the `ربط <token>` text that the WhatsApp link pre-fills.
+/// The code in a link message: Telegram's `/start <code>` deep link, or the
+/// `ربط حسابي في AQRGO: <code>` text that the WhatsApp link pre-fills (the
+/// code is its last word, so the older `ربط <code>` still works).
 fn link_token(text: &str) -> Option<&str> {
     text.strip_prefix("/start ")
         .or_else(|| text.strip_prefix("ربط "))
-        .map(str::trim)
-        .filter(|t| !t.is_empty())
+        .and_then(|rest| rest.split_whitespace().last())
 }
 
 fn link_label(channel: Channel) -> &'static str {
