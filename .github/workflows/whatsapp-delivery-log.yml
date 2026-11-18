@@ -21,6 +21,10 @@ jobs:
           envs: DEPLOY_DIR
           script: |
             cd "$DEPLOY_DIR"
-            docker compose logs --no-color --since 24h app 2>&1 \
-              | grep "whatsapp message was not delivered" | tail -n 20 \
-              || echo "No delivery errors in the last 24 hours."
+            failures=$(docker compose logs --no-color --since 24h app 2>&1 \
+              | grep "whatsapp message was not delivered" | tail -n 20)
+            echo "${failures:-No delivery errors in the last 24 hours.}"
+            # How often Meta reached the webhook, by response code (no request bodies).
+            echo "Webhook calls from Meta in the last 24 hours, by status:"
+            docker logs --since 24h kamal-proxy 2>&1 | grep '/whatsapp/webhook' \
+              | grep -o '"status":[0-9]*' | sort | uniq -c || true
