@@ -69,3 +69,22 @@ async fn probe_slips() {
         Err(e) => println!("ERROR {e}"),
     }
 }
+
+/// Jev's view of each size-like span: the first message is the one where
+/// Bedrock put the district in المساحة; the second has a street width too.
+#[tokio::test]
+#[ignore]
+async fn probe_area() {
+    let key = std::env::var("TYPESAFE_API_KEY").expect("set TYPESAFE_API_KEY");
+    let jev = JevClient::new(key, DEFAULT_MODEL.into());
+    for text in [
+        "أرض للبيع في حي الملقا ٦٠٠ متر بسعر ٢ مليون",
+        "أرض للبيع في حي الملقا مخطط 2456 قطعة 12 مساحة 625م شمالية شارع 20م",
+        "فيلا للبيع حي النرجس الأرض 400 متر والبناء 550 متر شارع 15 م",
+    ] {
+        match jev.judge(text).await {
+            Ok(j) => println!("{:?} | {text}", j.area),
+            Err(e) => println!("ERROR {e} | {text}"),
+        }
+    }
+}

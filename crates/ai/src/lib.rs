@@ -30,7 +30,7 @@ fn system_prompt(today: NaiveDate) -> String {
 - كل قطعة أو عقار مستقل = عنصر مستقل في القائمة.\n\
 - انسخ القيم كما وردت ولا تخترع أي معلومة. إذا لم تُذكر قيمة فاتركها نصاً فارغاً.\n\
 - offer_type: نوع العرض بصيغة قصيرة مثل «أرض للبيع» أو «فيلا للإيجار» أو «طلب شراء».\n\
-- plan_no رقم المخطط، plot_no رقم القطعة (قد تكون عدة أرقام)، area المساحة مع الوحدة إن ذُكرت.\n\
+- plan_no رقم المخطط، plot_no رقم القطعة (قد تكون عدة أرقام)، area المساحة: الرقم والوحدة فقط (مثل «600 متر» أو «20×30»)، ولا تضع فيها اسم الحي أو أي وصف آخر.\n\
 - frontages: الواجهات وعروض الشوارع، مثل «شمالية شارع 20م، شرقية ممر 6م».\n\
 - location: الحي والمدينة أو أي وصف للموقع، ورابط الخريطة إن وجد.\n\
 - price: السعر كما ورد (إجمالي أو سعر المتر، مع «على السوم» إن ذُكر).\n\
@@ -89,6 +89,7 @@ pub fn parse_tool_input(input: &Value, today: NaiveDate) -> Vec<ListingInput> {
                     l.set(key, v.trim().to_string());
                 }
             }
+            l.area = area::clean(&l.area, &l.location);
             l.listed_on = item
                 .get("listed_on")
                 .and_then(Value::as_str)
@@ -99,6 +100,7 @@ pub fn parse_tool_input(input: &Value, today: NaiveDate) -> Vec<ListingInput> {
         .collect()
 }
 
+pub mod area;
 pub mod faithful;
 pub mod jev;
 
@@ -235,6 +237,17 @@ mod tests {
         assert_eq!(rows[0].listed_on, Some(today()), "missing date = today");
         assert_eq!(rows[1].listed_on, NaiveDate::from_ymd_opt(2026, 11, 1));
         assert_eq!(rows[1].price, "");
+    }
+
+    #[test]
+    fn the_district_is_kept_out_of_the_area() {
+        let rows = parse_tool_input(
+            &json!({ "listings": [{ "offer_type": "أرض للبيع", "area": "الملقا 600 متر",
+                                    "location": "حي الملقا" }] }),
+            today(),
+        );
+        assert_eq!(rows[0].area, "600 متر");
+        assert_eq!(rows[0].location, "حي الملقا");
     }
 
     #[test]
