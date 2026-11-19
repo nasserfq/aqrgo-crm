@@ -12,6 +12,8 @@ pub struct Config {
     pub review_login: Option<auth::ReviewLogin>,
     pub google_client_id: Option<String>,
     pub google_client_secret: Option<String>,
+    /// Apple Services ID for Sign in with Apple on the website and desktop app.
+    pub apple_web_client_id: Option<String>,
     pub mail_from: Option<String>,
     pub telegram_bot_token: Option<String>,
     pub telegram_webhook_secret: Option<String>,
@@ -106,6 +108,7 @@ impl Config {
             },
             google_client_id: opt("GOOGLE_CLIENT_ID"),
             google_client_secret: opt("GOOGLE_CLIENT_SECRET"),
+            apple_web_client_id: opt("APPLE_WEB_CLIENT_ID"),
             mail_from: opt("MAIL_FROM"),
             telegram_bot_token,
             telegram_webhook_secret,

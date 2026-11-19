@@ -121,6 +121,9 @@ h2 { font-size: 1.1rem; font-weight: 600; margin: 28px 0 10px; }
 .btn.danger:hover { border-color: var(--danger); }
 .btn.google { width: 100%; }
 .btn.google:hover { box-shadow: 0 6px 20px -10px var(--shadow); }
+.btn.apple { width: 100%; background: #000; color: #fff; border-color: #000; }
+.btn.apple:hover { box-shadow: 0 6px 20px -10px var(--shadow); }
+.btn.google + .btn.apple { margin-top: 10px; }
 button.link, a.link { background: none; border: 0; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: none; background-image: linear-gradient(currentColor, currentColor); background-size: 0 1px; background-repeat: no-repeat; background-position: 100% 100%; transition: background-size .3s var(--ease-out); }
 button.link:hover, a.link:hover { background-size: 100% 1px; }
 

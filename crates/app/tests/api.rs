@@ -33,6 +33,7 @@ async fn app() -> (Router, Inbox) {
         google: None,
         telegram_bot: None,
         whatsapp_number: None,
+        apple_web_client_id: None,
     };
     let modules = app::Modules::new(
         pool.clone(),
@@ -356,6 +357,7 @@ async fn app_with_google() -> (Router, app::Modules) {
         }),
         telegram_bot: None,
         whatsapp_number: None,
+        apple_web_client_id: None,
     };
     let modules = app::Modules::new(
         pool.clone(),
@@ -691,6 +693,7 @@ async fn app_with_bots() -> (Router, Inbox, app::Modules) {
         google: None,
         telegram_bot: Some("aqrgo_crm_bot".into()),
         whatsapp_number: Some("966500000000".into()),
+        apple_web_client_id: None,
     };
     let modules = app::Modules::new(
         pool.clone(),
@@ -803,4 +806,301 @@ async fn channels_without_a_bot_are_unavailable() {
     )
     .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+/// A form POST as the desktop app's window (on aqrgo.com itself) sends it.
+async fn post_form(
+    app: &Router,
+    uri: &str,
+    form: &str,
+    cookie: Option<&str>,
+    site: &str,
+) -> (StatusCode, String, Vec<String>) {
+    let mut b = Request::post(uri)
+        .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+        .header("sec-fetch-site", site);
+    if let Some(c) = cookie {
+        b = b.header(header::COOKIE, c);
+    }
+    let res = app
+        .clone()
+        .oneshot(b.body(Body::from(form.to_string())).unwrap())
+        .await
+        .unwrap();
+    let status = res.status();
+    let location = res
+        .headers()
+        .get(header::LOCATION)
+        .map(|l| l.to_str().unwrap().to_string())
+        .unwrap_or_default();
+    let cookies = res
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .map(|v| v.to_str().unwrap().to_string())
+        .collect();
+    (status, location, cookies)
+}
+
+async fn get_with_cookie(app: &Router, uri: &str, cookie: &str) -> (StatusCode, String) {
+    let res = app
+        .clone()
+        .oneshot(
+            Request::get(uri)
+                .header(header::COOKIE, cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = res.status();
+    let location = res
+        .headers()
+        .get(header::LOCATION)
+        .map(|l| l.to_str().unwrap().to_string())
+        .unwrap_or_default();
+    (status, location)
+}
+
+fn session_from(cookies: &[String]) -> Option<String> {
+    cookies
+        .iter()
+        .find(|c| c.starts_with("aqrgo_session=") && !c.starts_with("aqrgo_session=;"))
+        .map(|c| c.split(';').next().unwrap().to_string())
+}
+
+#[tokio::test]
+async fn the_desktop_app_signs_in_with_google_through_its_own_link() {
+    let (app, modules) = app_with_google().await;
+    let verifier = "a-long-random-verifier-the-desktop-app-keeps";
+    let challenge = hex::encode(sha2::Sha256::digest(verifier.as_bytes()));
+
+    // The desktop app opens Google in the system browser and says it is the desktop app.
+    let (location, cookies) = redirect(
+        &app,
+        &format!("/auth/google?app={challenge}&client=desktop"),
+    )
+    .await;
+    assert!(location.starts_with("https://accounts.google.com/"));
+    let app_cookie = cookies
+        .iter()
+        .find(|c| c.starts_with("aqrgo_oauth_app="))
+        .expect("the app cookie")
+        .split(';')
+        .next()
+        .unwrap()
+        .to_string();
+
+    // Errors go back to the desktop app's own link, not the phone app's.
+    let (location, _) = redirect(&app, "/auth/google?app=nope&client=desktop").await;
+    assert_eq!(location, "aqrgo-desktop://auth?error=google");
+    let (_, location) = get_with_cookie(&app, "/auth/google/callback", &app_cookie).await;
+    assert_eq!(location, "aqrgo-desktop://auth?error=google");
+
+    // Back in its window, the app trades the one-time code for a web session.
+    let issue = || async {
+        let session = modules
+            .auth_web
+            .service
+            .sign_in_verified_email("nasser@example.com", "Nasser")
+            .await
+            .unwrap();
+        modules
+            .auth_web
+            .handoff
+            .issue(session, challenge.clone())
+            .await
+            .unwrap()
+    };
+    let code = issue().await;
+    let (status, location, cookies) = post_form(
+        &app,
+        "/auth/app/session",
+        &format!("code={code}&verifier=wrong"),
+        None,
+        "same-origin",
+    )
+    .await;
+    assert!(status.is_redirection());
+    assert_eq!(location, "/login?error=google");
+    assert!(session_from(&cookies).is_none());
+
+    let code = issue().await;
+    // Another site can't post a code into someone's browser.
+    let (status, _, _) = post_form(
+        &app,
+        "/auth/app/session",
+        &format!("code={code}&verifier={verifier}"),
+        None,
+        "cross-site",
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, location, cookies) = post_form(
+        &app,
+        "/auth/app/session",
+        &format!("code={code}&verifier={verifier}"),
+        None,
+        "same-origin",
+    )
+    .await;
+    assert!(status.is_redirection());
+    assert_eq!(location, "/");
+    let session = session_from(&cookies).expect("a session cookie");
+    let (status, _) = get_with_cookie(&app, "/account", &session).await;
+    assert_eq!(status, StatusCode::OK);
+    // The app opens at /login; signed in, that goes straight to the table.
+    let (status, location) = get_with_cookie(&app, "/login", &session).await;
+    assert!(status.is_redirection());
+    assert_eq!(location, "/");
+
+    // The code works once.
+    let (_, location, _) = post_form(
+        &app,
+        "/auth/app/session",
+        &format!("code={code}&verifier={verifier}"),
+        None,
+        "same-origin",
+    )
+    .await;
+    assert_eq!(location, "/login?error=google");
+}
+
+fn apple_web_token(aud: &str, nonce: &str) -> String {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
+    header.kid = Some("test-key".into());
+    jsonwebtoken::encode(
+        &header,
+        &json!({
+            "iss": "https://appleid.apple.com",
+            "aud": aud,
+            "sub": "001234.abcd",
+            "iat": now,
+            "exp": now + 600,
+            "nonce": nonce,
+            "email": "web@privaterelay.appleid.com",
+            "email_verified": true,
+        }),
+        &jsonwebtoken::EncodingKey::from_rsa_pem(include_bytes!("fixtures/apple_test_key.pem"))
+            .unwrap(),
+    )
+    .unwrap()
+}
+
+async fn page(app: &Router, uri: &str) -> String {
+    let res = app
+        .clone()
+        .oneshot(Request::get(uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    String::from_utf8_lossy(&bytes).to_string()
+}
+
+#[tokio::test]
+async fn the_website_and_desktop_app_sign_in_with_apple() {
+    let (_, mut modules) = app_with_google().await;
+
+    // Without a Services ID there is no Apple button.
+    let app = app::router(&modules);
+    assert!(!page(&app, "/login").await.contains("/auth/apple"));
+    let (location, _) = redirect(&app, "/auth/apple").await;
+    assert_eq!(location, "/login");
+
+    modules.auth_web.apple_web = Some(auth::apple::AppleVerifier::new(
+        "com.aqrgo.web",
+        Arc::new(TestAppleKeys),
+    ));
+    let app = app::router(&modules);
+    assert!(page(&app, "/login").await.contains("href=\"/auth/apple\""));
+
+    // Apple's page posts the answer back to us (a cross-site form post).
+    let (location, cookies) = redirect(&app, "/auth/apple").await;
+    assert!(location.starts_with("https://appleid.apple.com/auth/authorize?"));
+    assert!(location.contains("client_id=com.aqrgo.web"));
+    assert!(location.contains("response_mode=form_post"));
+    let state_cookie = cookies
+        .iter()
+        .find(|c| c.starts_with("aqrgo_apple_state="))
+        .expect("a state cookie");
+    assert!(state_cookie.contains("SameSite=None"));
+    let state_cookie = state_cookie.split(';').next().unwrap().to_string();
+    let state = state_cookie.split_once('=').unwrap().1.to_string();
+    let nonce = hex::encode(sha2::Sha256::digest(state.as_bytes()));
+
+    let refused = [
+        // Wrong state.
+        (format!(
+            "state=other&id_token={}",
+            apple_web_token("com.aqrgo.web", &nonce)
+        )),
+        // Meant for someone else.
+        (format!(
+            "state={state}&id_token={}",
+            apple_web_token("com.someone.else", &nonce)
+        )),
+        // Replayed from another sign-in.
+        (format!(
+            "state={state}&id_token={}",
+            apple_web_token("com.aqrgo.web", "old")
+        )),
+        // The person pressed cancel.
+        (format!("state={state}&error=user_cancelled_authorize")),
+    ];
+    for form in refused {
+        let (status, location, cookies) = post_form(
+            &app,
+            "/auth/apple/callback",
+            &form,
+            Some(&state_cookie),
+            "cross-site",
+        )
+        .await;
+        assert!(status.is_redirection(), "{form}: {status}");
+        assert_eq!(location, "/login?error=apple", "{form}");
+        assert!(session_from(&cookies).is_none(), "{form}");
+    }
+    assert!(page(&app, "/login?error=apple")
+        .await
+        .contains("تعذر الدخول عبر Apple، حاول مرة أخرى"));
+
+    let user = r#"{"name":{"firstName":"ناصر","lastName":"الفهد"},"email":"web@privaterelay.appleid.com"}"#;
+    let form = format!(
+        "state={state}&id_token={}&user={}",
+        apple_web_token("com.aqrgo.web", &nonce),
+        urlencode(user)
+    );
+    let (status, location, cookies) = post_form(
+        &app,
+        "/auth/apple/callback",
+        &form,
+        Some(&state_cookie),
+        "cross-site",
+    )
+    .await;
+    assert!(status.is_redirection());
+    assert_eq!(location, "/");
+    let session = session_from(&cookies).expect("a session cookie");
+    let (status, _) = get_with_cookie(&app, "/account", &session).await;
+    assert_eq!(status, StatusCode::OK);
+    let token = session.split_once('=').unwrap().1;
+    let (_, me) = call(&app, Method::GET, "/api/v1/me", Some(token), None).await;
+    assert_eq!(me["email"], "web@privaterelay.appleid.com");
+    assert_eq!(me["name"], "ناصر الفهد");
+}
+
+fn urlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
 }

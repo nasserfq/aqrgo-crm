@@ -247,6 +247,8 @@ pub fn router(m: &Modules) -> Router {
             auth::web::public_router(m.auth_web.clone())
                 .layer(middleware::from_fn(auth::web::reject_cross_site)),
         )
+        // Apple posts its answer from its own site; see `apple_callback_router`.
+        .merge(auth::web::apple_callback_router(m.auth_web.clone()))
         .merge(sites::web::public_router(m.sites.clone()))
         .merge(protected)
         .merge(auth::api::public_router(m.auth_web.clone()))
