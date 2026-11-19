@@ -21,6 +21,11 @@ See [docs/spec.md](docs/spec.md) for what was agreed.
 
 Modules call each other only through their public APIs. Each runs its own migrations in its own Postgres schema at startup.
 
+## Apps
+
+- `mobile/`: iPhone and Android app (Expo). See [mobile/README.md](mobile/README.md).
+- `desktop/`: Mac, Windows and Linux app (Rust, Tauri) showing aqrgo.com. See [desktop/README.md](desktop/README.md).
+
 ## Run locally
 
 ```bash

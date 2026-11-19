@@ -31,6 +31,7 @@ async fn app() -> (Router, Inbox) {
         google: None,
         telegram_bot: Some("aqrgo_bot".into()),
         whatsapp_number: Some("966500000000".into()),
+        apple_web_client_id: None,
     };
     let modules = app::Modules::new(
         pool.clone(),

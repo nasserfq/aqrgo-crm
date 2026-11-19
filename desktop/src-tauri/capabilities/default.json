@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The window shows aqrgo.com; the site gets no access to the app's commands.",
+  "windows": ["main"],
+  "permissions": []
+}

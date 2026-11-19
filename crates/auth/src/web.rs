@@ -28,8 +28,16 @@ pub const SESSION_COOKIE: &str = "aqrgo_session";
 const STATE_COOKIE: &str = "aqrgo_oauth_state";
 /// Set when the phone app started Google sign-in; holds the app's challenge.
 const APP_COOKIE: &str = "aqrgo_oauth_app";
-/// Where the browser goes back to the app after Google sign-in.
+/// Where the browser goes back to the phone app after Google sign-in.
 const APP_RETURN: &str = "aqrgo://auth";
+/// Where it goes back to the desktop app (its own link, so a phone app
+/// installed on the same Mac can't catch it).
+const DESKTOP_RETURN: &str = "aqrgo-desktop://auth";
+/// The app cookie's prefix when the desktop app started sign-in.
+const DESKTOP_PREFIX: &str = "desktop.";
+/// Ties Apple's answer to the browser that asked. Apple posts the answer from
+/// its own site, so this cookie must be `SameSite=None` to come along.
+const APPLE_STATE_COOKIE: &str = "aqrgo_apple_state";
 
 #[derive(Clone, Debug)]
 pub struct GoogleConfig {
@@ -49,6 +57,9 @@ pub struct WebConfig {
     pub telegram_bot: Option<String>,
     /// The WhatsApp business number in international digits, for `wa.me` links.
     pub whatsapp_number: Option<String>,
+    /// The Apple Services ID for Sign in with Apple on the website and the
+    /// desktop app (e.g. `com.aqrgo.web`). No Apple button without it.
+    pub apple_web_client_id: Option<String>,
 }
 
 impl WebConfig {
@@ -68,16 +79,23 @@ pub struct AuthWeb {
     pub config: WebConfig,
     pub handoff: AppHandoff,
     pub apple: AppleVerifier,
+    /// Checks the website's Apple tokens (audience: the Services ID).
+    pub apple_web: Option<AppleVerifier>,
     http: reqwest::Client,
 }
 
 impl AuthWeb {
     pub fn new(service: AuthService, config: WebConfig) -> Self {
+        let apple_keys = std::sync::Arc::new(AppleHttpKeys::default());
         Self {
+            apple_web: config
+                .apple_web_client_id
+                .clone()
+                .map(|id| AppleVerifier::new(id, apple_keys.clone())),
             handoff: AppHandoff::new(service.pool().clone()),
             service,
             config,
-            apple: AppleVerifier::new(APP_BUNDLE_ID, std::sync::Arc::new(AppleHttpKeys::default())),
+            apple: AppleVerifier::new(APP_BUNDLE_ID, apple_keys),
             http: reqwest::Client::new(),
         }
     }
@@ -91,8 +109,19 @@ pub fn public_router(state: AuthWeb) -> Router {
         .route("/login/verify", post(verify_code))
         .route("/auth/google", get(google_start))
         .route("/auth/google/callback", get(google_callback))
+        .route("/auth/app/session", post(app_session))
+        .route("/auth/apple", get(apple_start))
         .route("/auth/logout", post(logout))
         .route("/privacy", get(privacy_page))
+        .with_state(state)
+}
+
+/// Apple's answer to the website's sign-in. Apple posts it from its own site,
+/// so this route must stay outside [`reject_cross_site`]; the state cookie,
+/// the nonce and Apple's signature protect it instead.
+pub fn apple_callback_router(state: AuthWeb) -> Router {
+    Router::new()
+        .route("/auth/apple/callback", post(apple_callback))
         .with_state(state)
 }
 
@@ -217,6 +246,7 @@ struct LoginPage {
     email: String,
     error: Option<String>,
     google: bool,
+    apple: bool,
 }
 
 #[derive(PartialEq, Eq)]
@@ -240,9 +270,20 @@ struct LoginQuery {
     error: Option<String>,
 }
 
-async fn login_page(State(s): State<AuthWeb>, Query(q): Query<LoginQuery>) -> Response {
+async fn login_page(
+    State(s): State<AuthWeb>,
+    jar: CookieJar,
+    Query(q): Query<LoginQuery>,
+) -> Response {
+    // Already signed in (the desktop app opens here): straight to the table.
+    if let Some(c) = jar.get(SESSION_COOKIE) {
+        if let Ok(Some(_)) = s.service.user_for_session(c.value()).await {
+            return Redirect::to("/").into_response();
+        }
+    }
     let error = q.error.map(|e| match e.as_str() {
         "google" => "تعذر الدخول عبر Google، حاول مرة أخرى".to_string(),
+        "apple" => "تعذر الدخول عبر Apple، حاول مرة أخرى".to_string(),
         "not_allowed" => AuthError::NotAllowed.to_string(),
         _ => "حدث خطأ، حاول مرة أخرى".to_string(),
     });
@@ -251,6 +292,7 @@ async fn login_page(State(s): State<AuthWeb>, Query(q): Query<LoginQuery>) -> Re
         email: String::new(),
         error,
         google: s.config.google.is_some(),
+        apple: s.apple_web.is_some(),
     })
 }
 
@@ -267,6 +309,7 @@ async fn request_code(State(s): State<AuthWeb>, Form(f): Form<EmailForm>) -> Res
             email: f.email.trim().to_lowercase(),
             error: None,
             google,
+            apple: s.apple_web.is_some(),
         }),
         Err(e) => {
             if let AuthError::Db(_) | AuthError::Mail(_) = &e {
@@ -277,6 +320,7 @@ async fn request_code(State(s): State<AuthWeb>, Form(f): Form<EmailForm>) -> Res
                 email: f.email,
                 error: Some(e.to_string()),
                 google,
+                apple: s.apple_web.is_some(),
             })
         }
     }
@@ -309,6 +353,7 @@ async fn verify_code(
                 email: f.email,
                 error: Some(e.to_string()),
                 google: s.config.google.is_some(),
+                apple: s.apple_web.is_some(),
             })
         }
     }
@@ -329,6 +374,16 @@ async fn logout(State(s): State<AuthWeb>, jar: CookieJar) -> Response {
 struct GoogleStart {
     /// The phone app's challenge (hex SHA-256 of its verifier); see [`crate::handoff`].
     app: Option<String>,
+    /// `desktop` when the desktop app started sign-in.
+    client: Option<String>,
+}
+
+/// Which app link a sign-in goes back to, from the app cookie's value.
+fn app_return(cookie: &str) -> (&'static str, &str) {
+    match cookie.strip_prefix(DESKTOP_PREFIX) {
+        Some(challenge) => (DESKTOP_RETURN, challenge),
+        None => (APP_RETURN, cookie),
+    }
 }
 
 fn app_cookie(config: &WebConfig, challenge: String) -> Cookie<'static> {
@@ -346,14 +401,20 @@ async fn google_start(
     jar: CookieJar,
     Query(q): Query<GoogleStart>,
 ) -> Response {
+    let desktop = q.client.as_deref() == Some("desktop");
+    let back = if desktop { DESKTOP_RETURN } else { APP_RETURN };
     let app = match q.app {
-        Some(c) if crate::handoff::valid_challenge(&c) => Some(c),
-        Some(_) => return Redirect::to(&format!("{APP_RETURN}?error=google")).into_response(),
+        Some(c) if crate::handoff::valid_challenge(&c) => Some(if desktop {
+            format!("{DESKTOP_PREFIX}{c}")
+        } else {
+            c
+        }),
+        Some(_) => return Redirect::to(&format!("{back}?error=google")).into_response(),
         None => None,
     };
     let Some(g) = &s.config.google else {
         return match app {
-            Some(_) => Redirect::to(&format!("{APP_RETURN}?error=google")).into_response(),
+            Some(_) => Redirect::to(&format!("{back}?error=google")).into_response(),
             None => Redirect::to("/login").into_response(),
         };
     };
@@ -415,8 +476,8 @@ async fn google_callback(
     Query(q): Query<GoogleCallback>,
 ) -> Response {
     let app = jar.get(APP_COOKIE).map(|c| c.value().to_string());
-    let failed_to = if app.is_some() {
-        format!("{APP_RETURN}?error=google")
+    let failed_to = if let Some(a) = &app {
+        format!("{}?error=google", app_return(a).0)
     } else {
         "/login?error=google".to_string()
     };
@@ -486,8 +547,12 @@ async fn google_callback(
         .await;
     match (signed_in, app) {
         // The phone app gets a one-time code, never the token, in the redirect.
-        (Ok(token), Some(challenge)) => match s.handoff.issue(token, challenge).await {
-            Ok(code) => (jar, Redirect::to(&format!("{APP_RETURN}?code={code}"))).into_response(),
+        (Ok(token), Some(app)) => match s.handoff.issue(token, app_return(&app).1.into()).await {
+            Ok(code) => (
+                jar,
+                Redirect::to(&format!("{}?code={code}", app_return(&app).0)),
+            )
+                .into_response(),
             Err(e) => {
                 tracing::error!(error = %e, "google app handoff");
                 (jar, Redirect::to(&failed_to)).into_response()
@@ -496,9 +561,9 @@ async fn google_callback(
         (Ok(token), None) => {
             (jar.add(session_cookie(&s.config, token)), Redirect::to("/")).into_response()
         }
-        (Err(AuthError::NotAllowed), Some(_)) => (
+        (Err(AuthError::NotAllowed), Some(app)) => (
             jar,
-            Redirect::to(&format!("{APP_RETURN}?error=not_allowed")),
+            Redirect::to(&format!("{}?error=not_allowed", app_return(&app).0)),
         )
             .into_response(),
         (Err(AuthError::NotAllowed), None) => {
@@ -507,6 +572,152 @@ async fn google_callback(
         (Err(e), _) => {
             tracing::error!(error = %e, "google sign-in");
             (jar, Redirect::to(&failed_to)).into_response()
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct AppSessionForm {
+    code: String,
+    verifier: String,
+}
+
+/// The desktop app's window, back from Google in the system browser, trades
+/// the one-time code and its verifier for a normal web session cookie.
+async fn app_session(
+    State(s): State<AuthWeb>,
+    jar: CookieJar,
+    Form(f): Form<AppSessionForm>,
+) -> Response {
+    match s.handoff.redeem(f.code.trim(), &f.verifier).await {
+        Ok(Some(token)) => {
+            (jar.add(session_cookie(&s.config, token)), Redirect::to("/")).into_response()
+        }
+        Ok(None) => {
+            tracing::warn!("desktop handoff refused (unknown, used, expired or wrong verifier)");
+            Redirect::to("/login?error=google").into_response()
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "desktop handoff");
+            Redirect::to("/login?error=google").into_response()
+        }
+    }
+}
+
+fn sha256_hex(s: &str) -> String {
+    use sha2::Digest;
+    hex::encode(sha2::Sha256::digest(s.as_bytes()))
+}
+
+/// Sign in with Apple on the website (and in the desktop app's window).
+async fn apple_start(State(s): State<AuthWeb>, jar: CookieJar) -> Response {
+    let Some(client_id) = s.apple_web.as_ref().map(|v| v.audience().to_string()) else {
+        return Redirect::to("/login").into_response();
+    };
+    let state: String = rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
+    let redirect_uri = format!("{}/auth/apple/callback", s.config.public_url);
+    let nonce = sha256_hex(&state);
+    let url = reqwest::Url::parse_with_params(
+        "https://appleid.apple.com/auth/authorize",
+        &[
+            ("client_id", client_id.as_str()),
+            ("redirect_uri", redirect_uri.as_str()),
+            ("response_type", "code id_token"),
+            ("response_mode", "form_post"),
+            ("scope", "name email"),
+            ("state", state.as_str()),
+            ("nonce", nonce.as_str()),
+        ],
+    )
+    .expect("valid apple url");
+    let cookie = Cookie::build((APPLE_STATE_COOKIE, state))
+        .path("/auth/apple")
+        .http_only(true)
+        .secure(s.config.secure())
+        .same_site(SameSite::None)
+        .max_age(time::Duration::minutes(10))
+        .build();
+    (jar.add(cookie), Redirect::to(url.as_str())).into_response()
+}
+
+#[derive(Deserialize)]
+struct AppleCallback {
+    state: Option<String>,
+    id_token: Option<String>,
+    /// JSON with the person's name, sent only on their first sign-in.
+    user: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct AppleUser {
+    #[serde(default)]
+    name: AppleName,
+}
+
+#[derive(Deserialize, Default)]
+struct AppleName {
+    #[serde(default, rename = "firstName")]
+    first: String,
+    #[serde(default, rename = "lastName")]
+    last: String,
+}
+
+async fn apple_callback(
+    State(s): State<AuthWeb>,
+    jar: CookieJar,
+    Form(f): Form<AppleCallback>,
+) -> Response {
+    let expected = jar.get(APPLE_STATE_COOKIE).map(|c| c.value().to_string());
+    let jar = jar.remove(
+        Cookie::build(APPLE_STATE_COOKIE)
+            .path("/auth/apple")
+            .build(),
+    );
+    let fail = |jar: CookieJar, why: &str| {
+        tracing::warn!(reason = why, "apple web sign-in failed");
+        (jar, Redirect::to("/login?error=apple")).into_response()
+    };
+    let Some(verifier) = &s.apple_web else {
+        return Redirect::to("/login").into_response();
+    };
+    if let Some(e) = f.error {
+        return fail(jar, &format!("apple said {e}"));
+    }
+    let (Some(state), Some(token)) = (f.state, f.id_token) else {
+        return fail(jar, "missing state/id_token");
+    };
+    if expected.as_deref() != Some(state.as_str()) {
+        return fail(jar, "state mismatch");
+    }
+    let identity = match verifier
+        .verify_with_nonce(&token, Some(&sha256_hex(&state)))
+        .await
+    {
+        Ok(i) => i,
+        Err(why) => return fail(jar, &why),
+    };
+    let name = f
+        .user
+        .and_then(|u| serde_json::from_str::<AppleUser>(&u).ok())
+        .map(|u| format!("{} {}", u.name.first.trim(), u.name.last.trim()))
+        .unwrap_or_default();
+    match s
+        .service
+        .sign_in_verified_email(&identity.email, name.trim())
+        .await
+    {
+        Ok(token) => (jar.add(session_cookie(&s.config, token)), Redirect::to("/")).into_response(),
+        Err(AuthError::NotAllowed) => {
+            (jar, Redirect::to("/login?error=not_allowed")).into_response()
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "apple web sign-in");
+            (jar, Redirect::to("/login?error=apple")).into_response()
         }
     }
 }

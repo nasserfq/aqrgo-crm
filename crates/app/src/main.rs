@@ -101,6 +101,7 @@ async fn run(cfg: Config) -> anyhow::Result<()> {
         google,
         telegram_bot: bot_username,
         whatsapp_number,
+        apple_web_client_id: cfg.apple_web_client_id.clone(),
     };
     let mut modules = Modules::new(
         pool.clone(),

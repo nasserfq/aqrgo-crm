@@ -71,6 +71,8 @@ struct Claims {
     /// Apple sends `true` or `"true"`.
     #[serde(default)]
     email_verified: serde_json::Value,
+    #[serde(default)]
+    nonce: Option<String>,
 }
 
 impl AppleVerifier {
@@ -82,8 +84,23 @@ impl AppleVerifier {
         }
     }
 
+    /// Who the tokens must be for (bundle id or Services ID).
+    pub fn audience(&self) -> &str {
+        &self.audience
+    }
+
     /// The verified email in an Apple identity token, or why it was refused (for logs).
     pub async fn verify(&self, token: &str) -> Result<AppleIdentity, String> {
+        self.verify_with_nonce(token, None).await
+    }
+
+    /// As [`Self::verify`], and when `nonce` is given the token must carry it
+    /// (the website's sign-in sends one so a token can't be replayed).
+    pub async fn verify_with_nonce(
+        &self,
+        token: &str,
+        nonce: Option<&str>,
+    ) -> Result<AppleIdentity, String> {
         let header = decode_header(token).map_err(|e| format!("header: {e}"))?;
         if header.alg != Algorithm::RS256 {
             return Err("unexpected algorithm".into());
@@ -103,6 +120,11 @@ impl AppleVerifier {
         let claims = decode::<Claims>(token, &key, &v)
             .map_err(|e| format!("token: {e}"))?
             .claims;
+        if let Some(n) = nonce {
+            if claims.nonce.as_deref() != Some(n) {
+                return Err("nonce mismatch".into());
+            }
+        }
 
         let verified = matches!(&claims.email_verified, serde_json::Value::Bool(true))
             || claims.email_verified.as_str() == Some("true");

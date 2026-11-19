@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AQRGO</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f7f5fc; --ink: #1b1530; --muted: #6b6485; --accent: #6b4fd6; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #110d1f; --ink: #efeaff; --muted: #a39cc0; --accent: #a68cf0; } }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.6 system-ui, -apple-system, "Segoe UI", "Noto Sans Arabic", Tahoma, sans-serif;
+         display: grid; place-items: center; text-align: center; }
+  .mark { display: grid; grid-template-columns: repeat(5, 10px); gap: 3px; justify-content: center; margin-bottom: 18px; }
+  .mark i { width: 10px; height: 10px; background: var(--accent); opacity: .9; animation: pulse 1.4s ease-in-out infinite; }
+  .mark i:nth-child(2n) { animation-delay: .2s; } .mark i:nth-child(3n) { animation-delay: .4s; }
+  .mark i.o { visibility: hidden; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .mark i { animation: none; } }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  p { color: var(--muted); margin: 0 0 18px; }
+  button { font: inherit; background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 10px 22px; cursor: pointer; }
+  #offline { display: none; }
+  body.offline #offline { display: block; } body.offline #loading { display: none; }
+</style>
+</head>
+<body>
+  <main>
+    <div class="mark" dir="ltr" aria-hidden="true">
+      <i class="o"></i><i class="o"></i><i></i><i class="o"></i><i class="o"></i>
+      <i class="o"></i><i></i><i></i><i></i><i class="o"></i>
+      <i></i><i></i><i></i><i></i><i></i>
+      <i></i><i></i><i class="o"></i><i></i><i></i>
+    </div>
+    <div id="loading"><h1>AQRGO</h1><p>جارٍ الفتح…</p></div>
+    <div id="offline">
+      <h1>لا يوجد اتصال بالإنترنت</h1>
+      <p>تأكد من الاتصال، وسنحاول مرة أخرى تلقائياً.</p>
+      <button type="button" id="retry">حاول الآن</button>
+    </div>
+  </main>
+<script>
+  // The app shows aqrgo.com itself; this page only waits for a connection.
+  const START = "https://aqrgo.com/login";
+  let timer;
+  async function go() {
+    clearTimeout(timer);
+    document.body.classList.remove("offline");
+    try {
+      await fetch("https://aqrgo.com/privacy", { mode: "no-cors", cache: "no-store" });
+      location.replace(START);
+    } catch (_) {
+      document.body.classList.add("offline");
+      timer = setTimeout(go, 5000);
+    }
+  }
+  document.getElementById("retry").addEventListener("click", go);
+  window.addEventListener("online", go);
+  go();
+</script>
+</body>
+</html>
