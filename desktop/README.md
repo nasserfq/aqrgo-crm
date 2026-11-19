@@ -12,6 +12,13 @@ window. Everything new on the website appears in the app without a new release.
 - **Links**: aqrgo.com and Apple's sign-in pages stay in the window. Anything
   else (WhatsApp, Telegram, maps, agent sites) opens in the browser.
 - **Downloads** (Excel export) go to Downloads and the folder opens.
+- **Mac look**: no title bar; the traffic lights sit in the page's toolbar,
+  the sidebar shows the desktop through it, and the menu bar has the usual
+  shortcuts (⌘N new offer, ⌘F search, ⌘1–3 sections, ⌘, account, ⌘P print).
+  The app marks each page `<html data-shell="mac">` and the site's
+  `crates/common/static/mac.css` does the rest, so the look ships with the
+  site. The site may only ask the app to move the window
+  (`capabilities/mac-window.json`).
 - **Offline**: the start page (`dist/index.html`) waits for a connection.
 
 The site's own pieces live in `crates/auth` (`/auth/app/session`,

@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The window shows aqrgo.com; the site gets no access to the app's commands.",
-  "windows": ["main"],
-  "permissions": []
+  "description": "The app's own start page may move the window on Mac; the site gets nothing here (see mac-window.json).",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize"
+  ]
 }

@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "mac-window",
+  "description": "On Mac the page's toolbar and sidebar move the window (there is no title bar). That is all aqrgo.com may ask the app to do.",
+  "platforms": ["macOS"],
+  "windows": ["main"],
+  "remote": {
+    "urls": ["https://aqrgo.com/*", "https://www.aqrgo.com/*"]
+  },
+  "permissions": [
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize"
+  ]
+}

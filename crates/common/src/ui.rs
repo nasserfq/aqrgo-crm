@@ -16,8 +16,13 @@ pub enum Nav {
     None,
 }
 
-/// The shared stylesheet, served at `/static/app.css`.
-pub const CSS: &str = include_str!("../static/app.css");
+/// The shared stylesheet, served at `/static/app.css`. The Mac app's look
+/// (`mac.css`) rides along; it only applies under `<html data-shell="mac">`.
+pub const CSS: &str = concat!(
+    include_str!("../static/app.css"),
+    "\n",
+    include_str!("../static/mac.css")
+);
 
 /// A fingerprint of [`CSS`]. Pages link `app.css?v={CSS_VERSION}` so a new
 /// deploy is picked up at once while browsers may cache each version forever.
