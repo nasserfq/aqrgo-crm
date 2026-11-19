@@ -1,0 +1,48 @@
+name: Diagnose accounts (temporary)
+
+# Temporary, read-only: which account each chat is linked to and how many
+# listings each account owns. The repo is public, so it prints only ids,
+# counts, dates and whether an email matches a given SHA-256 hash; never an
+# email, a phone number or a listing's text.
+on:
+  push:
+    branches: [claude/project-thread-bosqsw]
+    paths: [.github/workflows/diagnose-accounts.yml]
+
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/aqrgo-crm' }}
+          TARGET: 85611214102fa2a109ebc2d7a40c3c37b92891e0dba83cf6a0eaa908b4c09fec
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
+          envs: DEPLOY_DIR,TARGET
+          script: |
+            cd "$DEPLOY_DIR"
+            docker compose exec -T db psql -U crm crm -v ON_ERROR_STOP=1 -v target="$TARGET" <<'SQL'
+            BEGIN READ ONLY;
+            SELECT u.id,
+                   encode(sha256(convert_to(u.email, 'UTF8')), 'hex') = :'target' AS is_nafa,
+                   split_part(u.email, '@', 2) AS domain,
+                   u.whatsapp_id IS NOT NULL AS whatsapp,
+                   u.telegram_id IS NOT NULL AS telegram,
+                   u.created_at::timestamp(0) AS created,
+                   u.last_login_at::timestamp(0) AS last_login,
+                   (SELECT count(*) FROM auth.sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS live_sessions,
+                   (SELECT max(s.created_at)::timestamp(0) FROM auth.sessions s WHERE s.user_id = u.id) AS last_session,
+                   (SELECT count(*) FROM listings.listings l WHERE l.owner_id = u.id) AS listings,
+                   (SELECT string_agg(DISTINCT l.source, ',') FROM listings.listings l WHERE l.owner_id = u.id) AS sources,
+                   (SELECT max(l.created_at)::timestamp(0) FROM listings.listings l WHERE l.owner_id = u.id) AS last_listing
+              FROM auth.users u ORDER BY u.id;
+            SELECT owner_id, ref_no, source, status, listed_on, created_at::timestamp(0)
+              FROM listings.listings ORDER BY id DESC LIMIT 10;
+            SELECT count(*) AS orphan_listings FROM listings.listings l
+             WHERE NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = l.owner_id);
+            ROLLBACK;
+            SQL
