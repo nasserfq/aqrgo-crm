@@ -386,7 +386,37 @@ impl AuthService {
         self.new_session(user_id).await
     }
 
+    /// Makes `raw_email` sign in to `user_id` too (see the `sign_in_emails`
+    /// table). The caller must have proved the email is the user's, e.g. with
+    /// a fresh Apple identity token. Re-linking moves the email; linking the
+    /// account's own email does nothing.
+    pub async fn add_sign_in_email(&self, user_id: i64, raw_email: &str) -> Result<(), AuthError> {
+        let email = normalize_email(raw_email)?;
+        sqlx::query(
+            "INSERT INTO auth.sign_in_emails (email, user_id)
+             SELECT $1, id FROM auth.users WHERE id = $2 AND email <> $1
+             ON CONFLICT (email) DO UPDATE SET user_id = EXCLUDED.user_id, created_at = now()",
+        )
+        .bind(&email)
+        .bind(user_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     async fn upsert_user(&self, email: &str, name: Option<&str>) -> Result<i64, AuthError> {
+        let linked: Option<i64> = sqlx::query_scalar(
+            "UPDATE auth.users u SET last_login_at = now()
+               FROM auth.sign_in_emails e
+              WHERE e.email = $1 AND u.id = e.user_id
+             RETURNING u.id",
+        )
+        .bind(email)
+        .fetch_optional(&self.pool)
+        .await?;
+        if let Some(id) = linked {
+            return Ok(id);
+        }
         Ok(sqlx::query_scalar(
             "INSERT INTO auth.users (email, name, last_login_at) VALUES ($1, COALESCE($2, ''), now())
              ON CONFLICT (email) DO UPDATE SET last_login_at = now(),

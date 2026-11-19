@@ -256,6 +256,11 @@ async fn ai_message_becomes_a_preview_and_is_saved_only_after_confirm() {
     assert_eq!(rows[0].location, "الملقا");
     assert_eq!(rows[0].source, "telegram");
     assert!(w.out.last_text().contains("تم الحفظ"));
+    assert!(
+        w.out.last_text().contains("nasser@example.com"),
+        "the reply names the account it saved to: {}",
+        w.out.last_text()
+    );
 
     // Tapping save again does not duplicate.
     w.tap(&save).await;

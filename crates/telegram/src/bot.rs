@@ -514,8 +514,9 @@ impl Bot {
                     Ok(l) => {
                         edit(
                             format!(
-                                "✅ تم الحفظ — رقم {}\n\n{}",
+                                "✅ تم الحفظ — رقم {}\nفي حساب: {}\n\n{}",
                                 l.number(),
+                                html_escape(&user.email),
                                 preview_text(&draft).replacen("📝 <b>مسودة عرض</b>\n", "", 1)
                             ),
                             Buttons::None,

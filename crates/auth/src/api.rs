@@ -71,6 +71,7 @@ pub fn public_router(state: AuthWeb) -> Router {
 pub fn account_router(state: AuthWeb) -> Router {
     Router::new()
         .route("/api/v1/me", get(me))
+        .route("/api/v1/auth/apple/link", post(link_apple))
         .route("/api/v1/channels", get(channels))
         .route("/api/v1/channels/{channel}/link", post(link_channel))
         .route("/api/v1/channels/{channel}", delete(unlink_channel))
@@ -191,6 +192,30 @@ async fn apple(State(state): State<AuthWeb>, Json(r): Json<AppleRequest>) -> Res
     match state.service.user_for_session(&token).await {
         Ok(Some(user)) => Json(json!({ "token": token, "user": user })).into_response(),
         Ok(None) => auth_error(AuthError::NotAllowed),
+        Err(e) => auth_error(e),
+    }
+}
+
+/// Links the Apple ID in `identity_token` to the signed-in account, so Sign in
+/// with Apple opens this account even when Apple hides the email.
+async fn link_apple(
+    State(state): State<AuthWeb>,
+    Extension(user): Extension<CurrentUser>,
+    Json(r): Json<AppleRequest>,
+) -> Response {
+    let identity = match state.apple.verify(&r.identity_token).await {
+        Ok(i) => i,
+        Err(why) => {
+            tracing::warn!(reason = %why, "apple link refused");
+            return error(StatusCode::UNAUTHORIZED, "تعذر ربط Apple، حاول مرة أخرى");
+        }
+    };
+    match state
+        .service
+        .add_sign_in_email(user.id, &identity.email)
+        .await
+    {
+        Ok(()) => Json(json!({ "linked": true })).into_response(),
         Err(e) => auth_error(e),
     }
 }

@@ -555,6 +555,78 @@ async fn the_app_signs_in_with_apple() {
     assert_eq!(status, StatusCode::OK);
 }
 
+/// Apple's "Hide My Email" gives a relay address that matches no account.
+/// Linking Apple from the account page makes later Apple sign-ins open that
+/// account instead of a new, empty one.
+#[tokio::test]
+async fn apple_with_a_hidden_email_can_be_linked_to_an_existing_account() {
+    let pool = testkit::fresh_pool().await;
+    app::migrate(&pool).await.unwrap();
+    let inbox = Inbox::default();
+    let web = auth::web::WebConfig {
+        public_url: "http://localhost".into(),
+        google: None,
+        telegram_bot: None,
+        whatsapp_number: None,
+        apple_web_client_id: None,
+    };
+    let mut modules = app::Modules::new(
+        pool.clone(),
+        jobs::Jobs::new(pool),
+        Arc::new(inbox.clone()),
+        auth::AuthConfig::default(),
+        web,
+        None,
+        None,
+    );
+    modules.auth_web.apple =
+        auth::apple::AppleVerifier::new("com.aqrgo.app", Arc::new(TestAppleKeys));
+    let app = app::router(&modules);
+    let me = sign_in(&app, &inbox, "nasser@example.com").await;
+    let apple = apple_token("com.aqrgo.app", true, 600);
+
+    // Signed out, or with a bad token, nothing is linked.
+    let (status, _) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/apple/link",
+        None,
+        Some(json!({ "identity_token": apple })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/apple/link",
+        Some(&me),
+        Some(json!({ "identity_token": apple_token("com.aqrgo.app", true, -600) })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "{body}");
+
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/apple/link",
+        Some(&me),
+        Some(json!({ "identity_token": apple })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/apple",
+        None,
+        Some(json!({ "identity_token": apple })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["user"]["email"], "nasser@example.com");
+}
+
 #[tokio::test]
 async fn deleting_the_account_removes_it_and_its_rows() {
     let (app, inbox) = app().await;

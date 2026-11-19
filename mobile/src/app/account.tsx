@@ -1,13 +1,14 @@
 // The account screen: who is signed in, linking the Telegram and WhatsApp
 // bots, sign out, privacy, and deleting the account (App Store rules require
 // deletion inside the app).
-import { useCallback, useState } from 'react';
-import { Alert, AppState, Linking, ScrollView, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, AppState, Linking, Platform, ScrollView, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 
 import { Button, Note, T } from '../components/ui';
 import { ApiError, type ChannelName, type Channels } from '../lib/api';
 import { API_URL, useSession } from '../lib/session';
+import { appleAvailable, linkApple } from '../lib/social';
 import { fonts, useColors } from '../lib/theme';
 
 export default function Account() {
@@ -16,6 +17,23 @@ export default function Account() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [channels, setChannels] = useState<Channels | null>(null);
+  const [apple, setApple] = useState(false);
+  const [appleLinked, setAppleLinked] = useState(false);
+  // Apple's "Hide My Email" address: an account of its own, with nothing to link to.
+  const hidden = user?.email.endsWith('@privaterelay.appleid.com') ?? false;
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') appleAvailable().then(setApple);
+  }, []);
+
+  const connectApple = async () => {
+    setError(null);
+    try {
+      if (await linkApple(api)) setAppleLinked(true);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'حدث خطأ، حاول مرة أخرى');
+    }
+  };
 
   const refresh = useCallback(() => {
     api.channels().then(setChannels, () => setChannels(null));
@@ -94,6 +112,20 @@ export default function Account() {
           </View>
         ),
       )}
+      {hidden ? (
+        <Note kind="info">
+          دخلت عبر Apple ببريد مخفي، وهذا حساب مستقل. إن كان لك حساب ببريدك، سجّل الخروج وادخل به، ثم اضغط «ربط Apple» من هذه الصفحة.
+        </Note>
+      ) : apple ? (
+        appleLinked ? (
+          <Note kind="info">تم ربط Apple. الدخول عبر Apple يفتح هذا الحساب من الآن.</Note>
+        ) : (
+          <View style={{ gap: 8 }}>
+            <Button testID="link-apple" kind="outline" label="ربط Apple" onPress={() => void connectApple()} />
+            <T style={{ color: c.muted, fontSize: 14 }}>ليفتح «الدخول عبر Apple» هذا الحساب نفسه، حتى مع إخفاء البريد.</T>
+          </View>
+        )
+      ) : null}
       <Button testID="sign-out" kind="outline" label="تسجيل الخروج" onPress={() => void signOut()} disabled={busy} />
       <Button
         testID="privacy"
