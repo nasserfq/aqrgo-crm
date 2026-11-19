@@ -1,0 +1,327 @@
+/* ---------- The Mac app ----------
+   The Mac app sets <html data-shell="mac"> (desktop/src-tauri/src/mac.rs).
+   The window has no title bar: the traffic lights sit at the top left of a
+   52px toolbar, and the sidebar is see-through to the desktop (the window's
+   sidebar material). Everything here looks and behaves like AppKit: system
+   font at 13px, small controls, hairlines, no page animations. */
+
+.nav-ico, .nav-section, .who-avatar, .mac-titlebar { display: none; }
+
+[data-shell="mac"] {
+  --side: 220px;
+  --bar: 52px;
+  --lights: 92px; /* room for the traffic lights, always at the physical left */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --line: rgba(0, 0, 0, .1);
+  --line-strong: rgba(0, 0, 0, .16);
+  --zebra: #f5f5f7;
+  --accent: #6a4fd3;
+  --accent-deep: #4b33a8;
+  --accent-soft: rgba(106, 79, 211, .12);
+  --sel: #6a4fd3;
+  --sel-ink: #ffffff;
+  --side-bg: rgba(236, 234, 242, .5);
+  --side-hover: rgba(0, 0, 0, .05);
+  --side-active: rgba(0, 0, 0, .09);
+  --bar-bg: rgba(255, 255, 255, .8);
+  --control: #ffffff;
+  --control-edge: 0 0 0 .5px rgba(0, 0, 0, .16), 0 .5px 1.5px rgba(0, 0, 0, .12);
+  --field: #ffffff;
+  --field-edge: rgba(0, 0, 0, .14);
+  --ring: 0 0 0 3.5px rgba(106, 79, 211, .38);
+  --radius: 6px;
+  --display: -apple-system, BlinkMacSystemFont, "SF Arabic", "SF Pro Text", "Geeza Pro", sans-serif;
+  font-family: var(--display);
+  scroll-padding-top: 120px;
+}
+@media (prefers-color-scheme: dark) {
+  [data-shell="mac"] {
+    --bg: #1e1e20;
+    --surface: #1e1e20;
+    --ink: #f5f5f7;
+    --muted: #98989d;
+    --line: rgba(255, 255, 255, .1);
+    --line-strong: rgba(255, 255, 255, .16);
+    --zebra: #252528;
+    --accent: #a68bef;
+    --accent-deep: #c9b8f8;
+    --accent-soft: rgba(166, 139, 239, .16);
+    --sel: #5d45bd;
+    --side-bg: rgba(38, 36, 46, .45);
+    --side-hover: rgba(255, 255, 255, .06);
+    --side-active: rgba(255, 255, 255, .1);
+    --bar-bg: rgba(30, 30, 32, .8);
+    --control: #3a3a3d;
+    --control-edge: 0 0 0 .5px rgba(0, 0, 0, .5), inset 0 .5px 0 rgba(255, 255, 255, .12);
+    --field: rgba(255, 255, 255, .06);
+    --field-edge: rgba(255, 255, 255, .12);
+    --ring: 0 0 0 3.5px rgba(166, 139, 239, .45);
+  }
+}
+
+/* The page sits on the window's material; the content pane is opaque. */
+[data-shell="mac"] body { background: transparent; font-size: 13px; line-height: 1.5; color: var(--ink); }
+[data-shell="mac"] main { animation: none; }
+[data-shell="mac"] a, [data-shell="mac"] button, [data-shell="mac"] .btn, [data-shell="mac"] .grid tbody tr,
+[data-shell="mac"] .check, [data-shell="mac"] select { cursor: default; }
+[data-shell="mac"] .topbar, [data-shell="mac"] .page-head, [data-shell="mac"] .btn, [data-shell="mac"] .grid thead,
+[data-shell="mac"] legend, [data-shell="mac"] .mac-titlebar { -webkit-user-select: none; user-select: none; }
+[data-shell="mac"] h1, [data-shell="mac"] h2 { letter-spacing: 0; }
+
+/* Native apps don't slide pages around: a short cross-fade, the sidebar stays put. */
+[data-shell="mac"]::view-transition-old(root) { animation: mac-fade-out .12s ease both; }
+[data-shell="mac"]::view-transition-new(root) { animation: mac-fade-in .16s ease both; }
+@keyframes mac-fade-out { to { opacity: 0; } }
+@keyframes mac-fade-in { from { opacity: 0; } }
+[data-shell="mac"] .grid tbody tr, [data-shell="mac"] .grid tbody .pill, [data-shell="mac"] .card,
+[data-shell="mac"] .card *, [data-shell="mac"] .field, [data-shell="mac"] .ok, [data-shell="mac"] .mark rect { animation: none !important; }
+[data-shell="mac"] .pixel-band { display: none; }
+
+/* ---- Sidebar (source list) ---- */
+[data-shell="mac"] .topbar-wrap {
+  position: fixed; inset-block: 0; inset-inline-start: 0; width: var(--side); z-index: 20;
+  background: var(--side-bg);
+  border-inline-end: 1px solid var(--line);
+}
+[data-shell="mac"] .topbar {
+  height: 100%; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 0;
+  padding: 0 10px 12px; background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none;
+}
+[data-shell="mac"] .brand {
+  height: var(--bar); flex: none; padding-inline: 8px; gap: 8px;
+  font-family: var(--display); font-size: 13px; font-weight: 700; letter-spacing: .04em;
+}
+[data-shell="mac"] .brand .mark { width: 18px; height: 18px; }
+[data-shell="mac"] .brand span { font-weight: 500; color: var(--muted); }
+[data-shell="mac"] .topbar nav { flex-direction: column; gap: 1px; flex: 1; }
+[data-shell="mac"] .nav-section {
+  display: block; padding: 6px 10px 4px; font-size: 11px; font-weight: 600; color: var(--muted); opacity: .85;
+}
+[data-shell="mac"] .topbar nav a {
+  display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border-radius: 6px;
+  color: var(--ink); font-weight: 400; font-size: 13px; transition: background-color .12s ease;
+}
+[data-shell="mac"] .topbar nav a::after { display: none; }
+[data-shell="mac"] .topbar nav a:hover { background: var(--side-hover); }
+[data-shell="mac"] .topbar nav a.active { background: var(--side-active); font-weight: 500; }
+[data-shell="mac"] .topbar nav a:active { background: var(--side-active); }
+[data-shell="mac"] .nav-ico {
+  display: block; width: 16px; height: 16px; flex: none;
+  fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+}
+[data-shell="mac"] .nav-long { display: none; }
+[data-shell="mac"] .who {
+  display: flex; align-items: center; gap: 8px; padding: 10px 8px 0; border-top: 1px solid var(--line);
+  color: var(--ink); font-size: 12px; min-width: 0;
+}
+[data-shell="mac"] .who-avatar {
+  display: grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 50%;
+  background: linear-gradient(160deg, #8f75ea, #4f37b0); color: #fff; font-size: 11px; font-weight: 600; text-transform: uppercase;
+}
+[data-shell="mac"] .who-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-shell="mac"] .who button.link { font-size: 12px; color: var(--muted); background-image: none; }
+[data-shell="mac"] .who button.link:hover { color: var(--accent); }
+
+/* ---- Content pane and its toolbar ---- */
+[data-shell="mac"] body:has(.topbar-wrap) main {
+  margin-inline-start: var(--side); min-height: 100vh; background: var(--bg);
+  padding: calc(var(--bar) + 20px) 28px 40px;
+}
+/* The toolbar strip: moves the window and shows the page title. */
+[data-shell="mac"] .mac-titlebar {
+  display: flex; align-items: center; position: fixed; top: 0; z-index: 15;
+  inset-inline-start: 0; inset-inline-end: 0; height: var(--bar);
+  padding-left: var(--lights); padding-right: 20px;
+  background: var(--bar-bg); backdrop-filter: saturate(1.8) blur(20px); -webkit-backdrop-filter: saturate(1.8) blur(20px);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px; font-weight: 600; color: var(--ink);
+}
+[data-shell="mac"] body:has(.topbar-wrap) .mac-titlebar { inset-inline-start: var(--side); }
+[data-shell="mac"] .mac-titlebar span { pointer-events: none; }
+/* Pages with their own header move it into the toolbar. */
+[data-shell="mac"] body:has(.page-head) .mac-titlebar span { display: none; }
+[data-shell="mac"] .page-head {
+  position: fixed; top: 0; z-index: 16; inset-inline-start: var(--side); inset-inline-end: 0; height: var(--bar);
+  margin: 0; padding-left: var(--lights); padding-right: 20px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: nowrap; gap: 12px;
+}
+[data-shell="mac"] .page-head > div { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+[data-shell="mac"] .page-head h1 { font-size: 13px; font-weight: 600; line-height: 1.25; margin: 0; }
+[data-shell="mac"] .page-head .count { margin: 0; font-size: 11px; line-height: 1.3; }
+[data-shell="mac"] .count b { color: inherit; font-weight: 400; }
+
+/* ---- Controls ---- */
+[data-shell="mac"] .btn {
+  height: 24px; padding: 0 10px; gap: 5px; border: 0; border-radius: 6px;
+  background: var(--control); color: var(--ink); box-shadow: var(--control-edge);
+  font-family: var(--display); font-size: 13px; font-weight: 400; line-height: 1;
+  transition: background-color .1s ease, filter .1s ease;
+}
+[data-shell="mac"] .btn:hover { transform: none; border-color: transparent; }
+[data-shell="mac"] .btn:active { transform: none; filter: brightness(.92); }
+[data-shell="mac"] .btn svg { width: 14px; height: 14px; }
+[data-shell="mac"] .btn.primary {
+  background: linear-gradient(to bottom, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0)) var(--sel);
+  color: var(--sel-ink); box-shadow: 0 0 0 .5px rgba(0, 0, 0, .12), 0 .5px 1.5px rgba(0, 0, 0, .2), inset 0 .5px 0 rgba(255, 255, 255, .25);
+}
+[data-shell="mac"] .btn.primary::before { display: none; }
+[data-shell="mac"] .btn.primary:hover { color: var(--sel-ink); }
+[data-shell="mac"] .btn.big { height: 24px; padding: 0 12px; font-size: 13px; }
+[data-shell="mac"] .btn.small { height: 22px; padding: 0 8px; font-size: 12px; }
+[data-shell="mac"] .btn.ghost { background: transparent; box-shadow: none; color: var(--ink); }
+[data-shell="mac"] .btn.ghost:hover { background: var(--side-hover); }
+[data-shell="mac"] .btn.danger { color: #d70015; }
+[data-shell="mac"] .btn.google, [data-shell="mac"] .btn.apple { height: 32px; font-size: 14px; font-weight: 500; border-radius: 8px; }
+[data-shell="mac"] .btn.apple { background: #1d1d1f; color: #fff; box-shadow: none; }
+@media (prefers-color-scheme: dark) {
+  [data-shell="mac"] .btn.apple { background: #fff; color: #1d1d1f; }
+  [data-shell="mac"] .btn.danger { color: #ff6961; }
+}
+[data-shell="mac"] .btn.is-busy::after { height: 4px; }
+
+[data-shell="mac"] input, [data-shell="mac"] select, [data-shell="mac"] textarea {
+  font-family: var(--display); font-size: 13px; padding: 4px 8px; min-height: 24px; line-height: 1.4;
+  border: 1px solid var(--field-edge); border-radius: 6px; background: var(--field); color: var(--ink);
+  box-shadow: inset 0 .5px 1px rgba(0, 0, 0, .06);
+}
+[data-shell="mac"] input:hover, [data-shell="mac"] select:hover, [data-shell="mac"] textarea:hover { border-color: var(--field-edge); }
+[data-shell="mac"] input:focus, [data-shell="mac"] select:focus, [data-shell="mac"] textarea:focus {
+  border-color: var(--accent); box-shadow: var(--ring);
+}
+[data-shell="mac"] .field:focus-within input, [data-shell="mac"] .field:focus-within textarea { transform: none; }
+[data-shell="mac"] .field:focus-within > span { color: inherit; }
+/* Pop-up buttons look like buttons, with the double chevron. */
+[data-shell="mac"] select {
+  -webkit-appearance: none; appearance: none; height: 24px; padding-block: 0; padding-inline: 10px 26px;
+  border: 0; background-color: var(--control); box-shadow: var(--control-edge);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Crect width='16' height='16' rx='4' fill='%236a4fd3'/%3E%3Cpath d='M5 6.5 8 4l3 2.5M5 9.5 8 12l3-2.5' fill='none' stroke='%23fff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: left 4px center; background-size: 16px;
+}
+[data-shell="mac"] select:focus { box-shadow: var(--control-edge), var(--ring); }
+[data-shell="mac"] .field select { height: 26px; width: 100%; }
+[data-shell="mac"] input[type=checkbox] { width: 14px; height: 14px; min-height: 0; box-shadow: none; }
+[data-shell="mac"] input[type=color] { padding: 2px; }
+[data-shell="mac"] input::placeholder, [data-shell="mac"] textarea::placeholder { color: var(--muted); opacity: .7; }
+[data-shell="mac"] :focus-visible { outline: none; box-shadow: var(--ring); }
+[data-shell="mac"] button.link:focus-visible, [data-shell="mac"] a:focus-visible { border-radius: 4px; }
+
+/* ---- Listings: a full-window table, like Finder's list view ---- */
+[data-shell="mac"] body:has(.listings) { height: 100vh; overflow: hidden; }
+[data-shell="mac"] body:has(.listings) main {
+  height: 100vh; min-height: 0; padding: var(--bar) 0 0; display: flex; flex-direction: column;
+}
+/* Scope bar under the toolbar: search, filter, actions. */
+[data-shell="mac"] .toolbar {
+  flex: none; margin: 0; padding: 8px 20px; gap: 8px; flex-wrap: nowrap; align-items: center;
+  border-bottom: 1px solid var(--line); background: var(--bg);
+}
+[data-shell="mac"] .filters { max-width: 520px; min-width: 0; gap: 8px; align-items: center; }
+[data-shell="mac"] .actions { gap: 8px; flex-wrap: nowrap; }
+[data-shell="mac"] .search-box input {
+  height: 26px; padding-inline-start: 28px; border: 0; border-radius: 7px; box-shadow: none;
+  background: rgba(118, 118, 128, .12);
+}
+[data-shell="mac"] .search-box input:focus { box-shadow: var(--ring); }
+[data-shell="mac"] .search-icon { width: 14px; height: 14px; inset-inline-start: 9px; }
+[data-shell="mac"] .sheet { flex: 1; min-height: 0; display: flex; background: var(--bg); border: 0; border-radius: 0; box-shadow: none; }
+[data-shell="mac"] .table-wrap { flex: 1; overflow: auto; border-radius: 0; }
+[data-shell="mac"] table.grid { font-size: 13px; min-width: 1400px; border-collapse: separate; border-spacing: 0; }
+[data-shell="mac"] .grid th, [data-shell="mac"] .grid td { border: 0; padding: 5px 10px; vertical-align: middle; }
+[data-shell="mac"] .grid thead th {
+  height: 28px; padding-block: 0; background: var(--bg);
+  color: var(--muted); font-size: 12px; font-weight: 500;
+  border-bottom: 1px solid var(--line); box-shadow: inset -1px 0 0 var(--line);
+}
+[data-shell="mac"] .grid thead th:last-child { box-shadow: none; }
+[data-shell="mac"] .grid tbody tr { background: var(--bg); transition: none; }
+[data-shell="mac"] .grid tbody tr:nth-child(even) { background: var(--zebra); }
+[data-shell="mac"] .grid tbody tr:hover { background: var(--bg); box-shadow: none; }
+[data-shell="mac"] .grid tbody tr:nth-child(even):hover { background: var(--zebra); }
+/* A row lights up in the accent the moment you press it, as a selection does. */
+[data-shell="mac"] .grid tbody tr:active, [data-shell="mac"] .grid tbody tr:focus {
+  background: var(--sel) !important; color: var(--sel-ink); outline: none;
+}
+[data-shell="mac"] .grid tbody tr:active td, [data-shell="mac"] .grid tbody tr:focus td,
+[data-shell="mac"] .grid tbody tr:active .num, [data-shell="mac"] .grid tbody tr:focus .num { color: inherit; }
+[data-shell="mac"] .grid tbody tr:active .pill, [data-shell="mac"] .grid tbody tr:focus .pill { background: rgba(255, 255, 255, .22); color: #fff; }
+[data-shell="mac"] .grid .num { font-family: var(--display); font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; }
+[data-shell="mac"] .grid .strong { font-weight: 600; }
+[data-shell="mac"] .grid .date { font-size: 12px; line-height: 1.35; }
+[data-shell="mac"] .listings th:nth-child(2), [data-shell="mac"] .listings td:nth-child(2) { box-shadow: inset -1px 0 0 var(--line); }
+[data-shell="mac"] .listings th.status, [data-shell="mac"] .listings td.status { box-shadow: inset 1px 0 0 var(--line); }
+[data-shell="mac"] .grid tr.empty td { padding: 80px 20px; background: var(--bg); font-size: 13px; }
+[data-shell="mac"] .grid tr.empty strong { font-family: var(--display); font-size: 17px; font-weight: 600; }
+[data-shell="mac"] .table-tip { display: none; }
+[data-shell="mac"] .pill { padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+[data-shell="mac"] .pill::before { width: 6px; height: 6px; border-radius: 50%; }
+[data-shell="mac"] .src { color: var(--muted); }
+[data-shell="mac"] body:has(.htmx-request) .table-wrap { opacity: .6; transition: opacity .15s ease .1s; }
+
+/* ---- Forms and settings: grouped boxes, like System Settings ---- */
+[data-shell="mac"] .card {
+  background: none; border: 0; box-shadow: none; padding: 0; --pad: 28px;
+}
+[data-shell="mac"] .form-card, [data-shell="mac"] .narrow { max-width: 760px; margin: 0 auto; }
+[data-shell="mac"] .card-head { margin-bottom: 8px; }
+[data-shell="mac"] .card h1, [data-shell="mac"] .account h1 { font-family: var(--display); font-size: 22px; font-weight: 700; margin: 0; }
+[data-shell="mac"] .eyebrow { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+[data-shell="mac"] .back { font-size: 12px; margin-bottom: 2px; }
+[data-shell="mac"] .lede-sm, [data-shell="mac"] .hint { font-size: 12px; }
+[data-shell="mac"] fieldset.group {
+  margin: 18px 0 0; padding: 12px 16px 16px; border: 0; border-radius: 10px;
+  background: var(--zebra); box-shadow: inset 0 0 0 1px var(--line);
+}
+[data-shell="mac"] fieldset.group > legend {
+  font-family: var(--display); font-size: 13px; font-weight: 600; color: var(--ink); margin-bottom: 0;
+}
+[data-shell="mac"] fieldset.group > .fields { margin-top: 10px; gap: 12px 16px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+[data-shell="mac"] .field { gap: 4px; }
+[data-shell="mac"] .field > span { font-size: 12px; font-weight: 500; color: var(--ink); }
+[data-shell="mac"] .field input, [data-shell="mac"] .field textarea { background: var(--bg); }
+/* Save and Cancel at the window's trailing edge, the default button last. */
+[data-shell="mac"] .sticky-actions {
+  justify-content: flex-end; margin: 20px 0 0; padding: 12px 0;
+  background: var(--bar-bg); border-top: 1px solid var(--line);
+}
+[data-shell="mac"] .sticky-actions .btn.primary { order: 2; min-width: 80px; }
+[data-shell="mac"] .sticky-actions .check.publish { order: -1; }
+[data-shell="mac"] .danger-zone {
+  margin-top: 18px; padding: 12px 16px; border: 0; border-radius: 10px;
+  background: var(--zebra); box-shadow: inset 0 0 0 1px var(--line);
+}
+[data-shell="mac"] .error, [data-shell="mac"] .ok { border: 0; border-radius: 8px; font-size: 13px; padding: 8px 12px; }
+[data-shell="mac"] .site-status, [data-shell="mac"] .profile {
+  border: 0; border-radius: 10px; background: var(--zebra); box-shadow: inset 0 0 0 1px var(--line);
+}
+[data-shell="mac"] .site-listings .check { border-radius: 8px; }
+[data-shell="mac"] .slug-input { border-radius: 6px; border-color: var(--field-edge); }
+[data-shell="mac"] .slug-input b { font-weight: 500; }
+[data-shell="mac"] .avatar { border-radius: 50%; font-family: var(--display); }
+[data-shell="mac"] .account h2 { font-family: var(--display); font-size: 15px; font-weight: 600; margin-top: 26px; padding-top: 0; border: 0; }
+[data-shell="mac"] .mini-steps li::before { border-radius: 50%; width: 20px; height: 20px; font-size: 11px; }
+[data-shell="mac"] input[type=file]::file-selector-button { border: 0; border-radius: 6px; padding: 3px 10px; box-shadow: var(--control-edge); background: var(--control); color: var(--ink); font-weight: 400; }
+
+/* ---- Sign-in: a welcome window ---- */
+[data-shell="mac"] .auth-page { min-height: 100vh; background: var(--bg); }
+[data-shell="mac"] .auth-page .mac-titlebar { background: none; border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; }
+[data-shell="mac"] .auth-page .mac-titlebar span { display: none; }
+[data-shell="mac"] .auth-page main { padding: 48px clamp(24px, 5vw, 64px); }
+[data-shell="mac"] .auth-card { max-width: 340px; }
+[data-shell="mac"] .auth-brand { font-family: var(--display); font-size: 20px; font-weight: 700; letter-spacing: .04em; }
+[data-shell="mac"] .auth-card .lede { font-size: 13px; margin: 6px 0 22px; }
+[data-shell="mac"] .auth-card .field input { height: 30px; font-size: 14px; border-radius: 7px; }
+[data-shell="mac"] .auth-card .btn.primary { height: 30px; font-size: 14px; font-weight: 500; border-radius: 7px; }
+[data-shell="mac"] .code-input { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .35em; }
+[data-shell="mac"] .hero h2 { font-family: var(--display); font-weight: 700; letter-spacing: -.01em; }
+[data-shell="mac"] .hero h2, [data-shell="mac"] .hero p { animation: none; }
+[data-shell="mac"] .or { margin: 16px 0; font-size: 12px; }
+
+@media print {
+  [data-shell="mac"] .topbar-wrap, [data-shell="mac"] .mac-titlebar, [data-shell="mac"] .page-head, [data-shell="mac"] .toolbar { display: none !important; }
+  [data-shell="mac"] body, [data-shell="mac"] body:has(.listings) { height: auto; overflow: visible; background: #fff; }
+  [data-shell="mac"] body:has(.listings) main, [data-shell="mac"] body:has(.topbar-wrap) main { margin: 0; padding: 0; height: auto; display: block; }
+  [data-shell="mac"] .table-wrap { overflow: visible; }
+}

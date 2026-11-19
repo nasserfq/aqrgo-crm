@@ -1,6 +1,7 @@
 //! AQRGO for Mac, Windows and Linux: a window on aqrgo.com, with Google
 //! sign-in through the system browser and the app's own link.
 
+mod mac;
 mod nav;
 
 use std::sync::Mutex;
@@ -70,11 +71,24 @@ fn build_window(app: &AppHandle) -> tauri::Result<()> {
         Ok(url) if site() != nav::SITE => WebviewUrl::External(url),
         _ => WebviewUrl::App("index.html".into()),
     };
-    WebviewWindowBuilder::new(app, "main", start)
+    let builder = WebviewWindowBuilder::new(app, "main", start)
         .title("AQRGO")
         .inner_size(1280.0, 820.0)
         .min_inner_size(900.0, 600.0)
-        .initialization_script(nav::LINKS_SCRIPT)
+        .initialization_script(nav::LINKS_SCRIPT);
+    // On Mac: no title bar, the traffic lights sit in the page's toolbar and
+    // the sidebar shows the desktop through it, like Finder and Mail.
+    #[cfg(target_os = "macos")]
+    let builder = builder
+        .title_bar_style(tauri::TitleBarStyle::Overlay)
+        .hidden_title(true)
+        .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition::new(
+            18.0, 22.0,
+        )))
+        .transparent(true)
+        .effects(mac::sidebar_effect())
+        .initialization_script(mac::SHELL_SCRIPT);
+    builder
         .on_navigation(move |url| match nav::decide(url) {
             Nav::Stay => true,
             Nav::Browser => {
@@ -138,11 +152,25 @@ pub fn run() {
     {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _, _| show(app)));
     }
+    // The Mac menu bar; Windows and Linux windows keep no menu.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.menu(|app| mac::menu(app));
+    }
     builder
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .manage(SignIn::default())
+        .on_menu_event(|app, event| match mac::action(event.id().as_ref()) {
+            Some(mac::Action::Open(path)) => go(app, &format!("{}{path}", site())),
+            Some(mac::Action::Run(js)) => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.eval(js);
+                }
+            }
+            None => {}
+        })
         .setup(|app| {
             // Installers register the link; this also covers the AppImage.
             #[cfg(any(target_os = "windows", target_os = "linux"))]
