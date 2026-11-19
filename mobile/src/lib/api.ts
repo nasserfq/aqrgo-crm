@@ -128,6 +128,9 @@ export function createApi(opts: Options) {
         identity_token: identityToken,
         name,
       }),
+    /** Makes Sign in with Apple open the signed-in account (even with a hidden email). */
+    linkApple: (identityToken: string) =>
+      request<{ linked: boolean }>('POST', '/api/v1/auth/apple/link', { identity_token: identityToken }),
     /** Deletes the account and everything in it. */
     deleteAccount: () => request<void>('DELETE', '/api/v1/me'),
 

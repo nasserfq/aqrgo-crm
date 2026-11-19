@@ -610,3 +610,46 @@ async fn a_valid_code_is_refused_once_the_days_wrong_tries_are_used_up() {
     let code = inbox.last_code();
     assert!(auth.verify_code("a@example.com", &code).await.is_ok());
 }
+
+#[tokio::test]
+async fn a_linked_sign_in_email_opens_the_account_it_was_linked_to() {
+    let (auth, inbox) = setup(AuthConfig::default()).await;
+    let session = auth
+        .sign_in_verified_email("nasser@example.com", "ناصر")
+        .await
+        .unwrap();
+    let me = auth.user_for_session(&session).await.unwrap().unwrap();
+
+    // An Apple relay address that already made its own empty account.
+    let relay = auth
+        .sign_in_verified_email("abc@privaterelay.appleid.com", "")
+        .await
+        .unwrap();
+    let relay_user = auth.user_for_session(&relay).await.unwrap().unwrap();
+    assert_ne!(relay_user.id, me.id);
+
+    auth.add_sign_in_email(me.id, " ABC@privaterelay.appleid.com ")
+        .await
+        .unwrap();
+    // Linking your own main email is a no-op, not an error.
+    auth.add_sign_in_email(me.id, "nasser@example.com")
+        .await
+        .unwrap();
+
+    let s = auth
+        .sign_in_verified_email("abc@privaterelay.appleid.com", "")
+        .await
+        .unwrap();
+    assert_eq!(auth.user_for_session(&s).await.unwrap().unwrap().id, me.id);
+
+    auth.request_code("abc@privaterelay.appleid.com")
+        .await
+        .unwrap();
+    let s = auth
+        .verify_code("abc@privaterelay.appleid.com", &inbox.last_code())
+        .await
+        .unwrap();
+    let user = auth.user_for_session(&s).await.unwrap().unwrap();
+    assert_eq!(user.id, me.id);
+    assert_eq!(user.email, "nasser@example.com");
+}

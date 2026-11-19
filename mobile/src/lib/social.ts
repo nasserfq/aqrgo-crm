@@ -54,7 +54,10 @@ export async function signInWithGoogle(api: Api, baseUrl: string): Promise<Signe
 
 export const appleAvailable = () => AppleAuthentication.isAvailableAsync().catch(() => false);
 
-export async function signInWithApple(api: Api): Promise<SignedIn> {
+const APPLE_FAILED = 'تعذر الدخول عبر Apple، حاول مرة أخرى';
+
+/** Shows Apple's sheet. Null when the user closes it. */
+async function appleCredential() {
   let credential: AppleAuthentication.AppleAuthenticationCredential;
   try {
     credential = await AppleAuthentication.signInAsync({
@@ -65,11 +68,28 @@ export async function signInWithApple(api: Api): Promise<SignedIn> {
     });
   } catch (e) {
     if ((e as { code?: string }).code === 'ERR_REQUEST_CANCELED') return null;
-    throw new ApiError(401, 'تعذر الدخول عبر Apple، حاول مرة أخرى');
+    throw new ApiError(401, APPLE_FAILED);
   }
-  if (!credential.identityToken) throw new ApiError(401, 'تعذر الدخول عبر Apple، حاول مرة أخرى');
+  if (!credential.identityToken) throw new ApiError(401, APPLE_FAILED);
+  return { ...credential, identityToken: credential.identityToken };
+}
+
+export async function signInWithApple(api: Api): Promise<SignedIn> {
+  const credential = await appleCredential();
+  if (!credential) return null;
   const name = [credential.fullName?.givenName, credential.fullName?.familyName]
     .filter(Boolean)
     .join(' ');
   return api.appleSignIn(credential.identityToken, name);
+}
+
+/**
+ * Ties this phone's Apple ID to the signed-in account, so Sign in with Apple
+ * opens it even when Apple hides the email. False when the sheet was closed.
+ */
+export async function linkApple(api: Api): Promise<boolean> {
+  const credential = await appleCredential();
+  if (!credential) return false;
+  await api.linkApple(credential.identityToken);
+  return true;
 }
