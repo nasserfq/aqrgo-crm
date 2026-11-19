@@ -99,7 +99,7 @@ export default function Listings() {
             <View style={{ alignItems: 'center', padding: 40, gap: 6 }}>
               <T style={{ fontFamily: fonts.display, fontSize: 18 }}>{q || status ? 'لا نتائج' : 'لا توجد عروض بعد'}</T>
               <T style={{ color: c.muted, textAlign: 'center' }}>
-                {q || status ? 'جرّب كلمة أخرى أو حالة أخرى' : 'أضف أول عرض، أو أرسله إلى بوت تيليجرام'}
+                {q || status ? 'جرّب كلمة أخرى أو حالة أخرى' : 'أضف أول عرض، أو أرسله إلى بوت تيليجرام أو واتساب'}
               </T>
             </View>
           )

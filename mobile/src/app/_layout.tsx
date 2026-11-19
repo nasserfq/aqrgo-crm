@@ -4,12 +4,12 @@ import {
   IBMPlexSansArabic_500Medium,
   IBMPlexSansArabic_700Bold,
 } from '@expo-google-fonts/ibm-plex-sans-arabic';
-import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { focusManager, QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
 import { useFonts } from 'expo-font';
 import { SplashScreen, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { I18nManager, Platform } from 'react-native';
+import { AppState, I18nManager, Platform } from 'react-native';
 
 import { registerForPush, useOpenTappedNotification } from '../lib/notifications';
 import { SessionProvider, useSession } from '../lib/session';
@@ -18,6 +18,16 @@ import { fonts, useColors } from '../lib/theme';
 // Arabic first: the whole app is laid out right to left (also forced natively
 // by the expo-localization plugin in app.json).
 I18nManager.allowRTL(true);
+
+// React Query only knows about browser focus. On a phone, coming back to the
+// app (say from WhatsApp after sending a listing) counts as focus, so stale
+// lists refetch without a pull to refresh.
+if (Platform.OS !== 'web') {
+  focusManager.setEventListener((setFocused) => {
+    const sub = AppState.addEventListener('change', (s) => setFocused(s === 'active'));
+    return () => sub.remove();
+  });
+}
 I18nManager.forceRTL(true);
 if (Platform.OS === 'web' && typeof document !== 'undefined') document.documentElement.dir = 'rtl';
 

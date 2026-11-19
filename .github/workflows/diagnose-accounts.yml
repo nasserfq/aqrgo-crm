@@ -31,7 +31,7 @@ jobs:
                    split_part(u.email, '@', 2) AS domain,
                    encode(sha256(convert_to(u.email, 'UTF8')), 'hex') = :'target' AS exact_nafa,
                    encode(sha256(convert_to(replace(split_part(split_part(u.email, '@', 1), '+', 1), '.', '') || '@' || split_part(u.email, '@', 2), 'UTF8')), 'hex') = :'target' AS nafa_ignoring_dots_plus,
-                   u.email LIKE 'nafa%' AS starts_nafa,
+                   u.email LIKE 'nafa%' AS starts_nafa, u.email LIKE 'nafa050%' AS starts_nafa050, length(split_part(u.email, '@', 1)) AS local_len,
                    encode(sha256(convert_to(u.email, 'UTF8')), 'hex') = 'a035123d405e1060e157e07a36fd674ac90a055b07c30e6ac3fac07d90dd7ab4' AS is_nonq,
                    u.whatsapp_id IS NOT NULL AS whatsapp,
                    u.telegram_id IS NOT NULL AS telegram

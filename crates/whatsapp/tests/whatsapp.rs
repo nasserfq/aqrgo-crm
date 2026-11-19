@@ -260,6 +260,11 @@ async fn a_linked_number_sends_a_lead_confirms_it_and_it_lands_in_the_table() {
     assert_eq!(rows[0].location, "الملقا");
     assert_eq!(rows[0].source, "whatsapp");
     assert!(w.last_body().contains("تم الحفظ"), "{}", w.last_body());
+    assert!(
+        w.last_body().contains("nasser@example.com"),
+        "the reply names the account it saved to: {}",
+        w.last_body()
+    );
 }
 
 #[tokio::test]
