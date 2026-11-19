@@ -1,11 +1,28 @@
 //! What the window may open, and the sign-in links coming back from the
 //! browser. Kept free of Tauri so it can be tested on its own.
 
+use std::sync::OnceLock;
+
 use sha2::{Digest, Sha256};
 use url::Url;
 
 /// The site the window shows.
 pub const SITE: &str = "https://aqrgo.com";
+
+/// The site in use: aqrgo.com, except that debug builds can point at a local
+/// server with `AQRGO_SITE` (for end-to-end tests). Release builds ignore it.
+pub fn site() -> &'static str {
+    static CURRENT: OnceLock<String> = OnceLock::new();
+    CURRENT.get_or_init(|| {
+        #[cfg(debug_assertions)]
+        if let Ok(s) = std::env::var("AQRGO_SITE") {
+            if Url::parse(&s).is_ok() {
+                return s.trim_end_matches('/').to_string();
+            }
+        }
+        SITE.to_string()
+    })
+}
 /// The app's own link, which Google sign-in returns to (`aqrgo-desktop://auth?code=…`).
 pub const SCHEME: &str = "aqrgo-desktop";
 
@@ -28,7 +45,9 @@ pub enum Nav {
 }
 
 pub fn is_site(url: &Url) -> bool {
-    matches!(url.scheme(), "https") && matches!(url.host_str(), Some("aqrgo.com" | "www.aqrgo.com"))
+    let ours =
+        url.scheme() == "https" && matches!(url.host_str(), Some("aqrgo.com" | "www.aqrgo.com"));
+    ours || Url::parse(site()).is_ok_and(|s| s.origin() == url.origin())
 }
 
 /// The app's own start page (`tauri://localhost` on Mac and Linux,
@@ -72,7 +91,7 @@ pub fn new_verifier() -> (String, String) {
 
 /// Where the browser starts Google sign-in for the desktop app.
 pub fn google_url(challenge: &str) -> String {
-    format!("{SITE}/auth/google?app={challenge}&client=desktop")
+    format!("{}/auth/google?app={challenge}&client=desktop", site())
 }
 
 #[derive(Debug, PartialEq)]
@@ -125,7 +144,7 @@ pub fn handoff_script(code: &str, verifier: &str) -> Option<String> {
 /// Telegram, maps) go through normal navigation instead, which sends
 /// anything outside aqrgo.com to the browser.
 pub const LINKS_SCRIPT: &str = r#"(function () {
-  if (location.hostname !== "aqrgo.com" && location.hostname !== "www.aqrgo.com") return;
+  if (location.protocol === "tauri:" || location.hostname === "tauri.localhost") return;
   document.addEventListener("click", function (e) {
     var a = e.target && e.target.closest ? e.target.closest('a[target="_blank"]') : null;
     if (!a || !a.href) return;

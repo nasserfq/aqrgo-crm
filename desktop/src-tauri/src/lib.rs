@@ -5,7 +5,7 @@ mod nav;
 
 use std::sync::Mutex;
 
-use nav::{Link, Nav, SITE};
+use nav::{site, Link, Nav};
 use tauri::{
     webview::{DownloadEvent, PageLoadEvent},
     AppHandle, Manager, Url, WebviewUrl, WebviewWindowBuilder,
@@ -50,13 +50,13 @@ fn handle_link(app: &AppHandle, url: &Url) {
             let state = app.state::<SignIn>();
             let verifier = state.verifier.lock().unwrap().take();
             let Some(script) = verifier.and_then(|v| nav::handoff_script(&code, &v)) else {
-                go(app, &format!("{SITE}/login?error=google"));
+                go(app, &format!("{}/login?error=google", site()));
                 return show(app);
             };
             *state.pending.lock().unwrap() = Some(script);
-            go(app, &format!("{SITE}/login"));
+            go(app, &format!("{}/login", site()));
         }
-        Some(Link::Error(e)) => go(app, &format!("{SITE}/login?error={e}")),
+        Some(Link::Error(e)) => go(app, &format!("{}/login?error={e}", site())),
         None => return,
     }
     show(app);
@@ -64,7 +64,13 @@ fn handle_link(app: &AppHandle, url: &Url) {
 
 fn build_window(app: &AppHandle) -> tauri::Result<()> {
     let nav_app = app.clone();
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+    // The start page waits for a connection to aqrgo.com; a local test
+    // server (debug builds only) opens directly.
+    let start = match Url::parse(&format!("{}/login", site())) {
+        Ok(url) if site() != nav::SITE => WebviewUrl::External(url),
+        _ => WebviewUrl::App("index.html".into()),
+    };
+    WebviewWindowBuilder::new(app, "main", start)
         .title("AQRGO")
         .inner_size(1280.0, 820.0)
         .min_inner_size(900.0, 600.0)

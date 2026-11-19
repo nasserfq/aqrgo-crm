@@ -59,3 +59,6 @@ npm ci
 npx tauri dev      # or: npx tauri build
 cd src-tauri && cargo test
 ```
+
+Debug builds can point at a local server for end-to-end testing:
+`AQRGO_SITE=http://localhost:8080 npx tauri dev` (release builds ignore it).
