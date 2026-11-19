@@ -255,6 +255,26 @@ enum Step {
     Code,
 }
 
+/// The desktop app's return page: Chrome drops a redirect to `aqrgo-desktop://`
+/// at the end of Google's redirect chain, so the page offers a button to click.
+#[derive(Template)]
+#[template(path = "app_return.html")]
+struct AppReturnPage {
+    link: String,
+    failed: bool,
+}
+
+/// Sends a sign-in back to the app link `link`: the phone app follows a
+/// redirect, the desktop app needs a page with a button.
+fn back_to_app(link: String) -> Response {
+    if link.starts_with(DESKTOP_RETURN) {
+        let failed = link.contains("error=");
+        render(&AppReturnPage { link, failed })
+    } else {
+        Redirect::to(&link).into_response()
+    }
+}
+
 fn render<T: Template>(t: &T) -> Response {
     match common::ui::render(t) {
         Ok(html) => Html(html).into_response(),
@@ -409,12 +429,12 @@ async fn google_start(
         } else {
             c
         }),
-        Some(_) => return Redirect::to(&format!("{back}?error=google")).into_response(),
+        Some(_) => return back_to_app(format!("{back}?error=google")),
         None => None,
     };
     let Some(g) = &s.config.google else {
         return match app {
-            Some(_) => Redirect::to(&format!("{back}?error=google")).into_response(),
+            Some(_) => back_to_app(format!("{back}?error=google")),
             None => Redirect::to("/login").into_response(),
         };
     };
@@ -486,7 +506,7 @@ async fn google_callback(
         (
             jar.remove(Cookie::build(STATE_COOKIE).path("/auth/google").build())
                 .remove(Cookie::build(APP_COOKIE).path("/auth/google").build()),
-            Redirect::to(&failed_to),
+            back_to_app(failed_to.clone()),
         )
             .into_response()
     };
@@ -550,12 +570,12 @@ async fn google_callback(
         (Ok(token), Some(app)) => match s.handoff.issue(token, app_return(&app).1.into()).await {
             Ok(code) => (
                 jar,
-                Redirect::to(&format!("{}?code={code}", app_return(&app).0)),
+                back_to_app(format!("{}?code={code}", app_return(&app).0)),
             )
                 .into_response(),
             Err(e) => {
                 tracing::error!(error = %e, "google app handoff");
-                (jar, Redirect::to(&failed_to)).into_response()
+                (jar, back_to_app(failed_to)).into_response()
             }
         },
         (Ok(token), None) => {
@@ -563,7 +583,7 @@ async fn google_callback(
         }
         (Err(AuthError::NotAllowed), Some(app)) => (
             jar,
-            Redirect::to(&format!("{}?error=not_allowed", app_return(&app).0)),
+            back_to_app(format!("{}?error=not_allowed", app_return(&app).0)),
         )
             .into_response(),
         (Err(AuthError::NotAllowed), None) => {
@@ -571,7 +591,7 @@ async fn google_callback(
         }
         (Err(e), _) => {
             tracing::error!(error = %e, "google sign-in");
-            (jar, Redirect::to(&failed_to)).into_response()
+            (jar, back_to_app(failed_to)).into_response()
         }
     }
 }

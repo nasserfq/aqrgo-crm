@@ -862,6 +862,22 @@ async fn get_with_cookie(app: &Router, uri: &str, cookie: &str) -> (StatusCode, 
     (status, location)
 }
 
+async fn page_with_cookie(app: &Router, uri: &str, cookie: &str) -> (StatusCode, String) {
+    let res = app
+        .clone()
+        .oneshot(
+            Request::get(uri)
+                .header(header::COOKIE, cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (status, String::from_utf8_lossy(&bytes).to_string())
+}
+
 fn session_from(cookies: &[String]) -> Option<String> {
     cookies
         .iter()
@@ -892,10 +908,14 @@ async fn the_desktop_app_signs_in_with_google_through_its_own_link() {
         .to_string();
 
     // Errors go back to the desktop app's own link, not the phone app's.
-    let (location, _) = redirect(&app, "/auth/google?app=nope&client=desktop").await;
-    assert_eq!(location, "aqrgo-desktop://auth?error=google");
-    let (_, location) = get_with_cookie(&app, "/auth/google/callback", &app_cookie).await;
-    assert_eq!(location, "aqrgo-desktop://auth?error=google");
+    // Chrome won't follow a redirect into an app at the end of Google's
+    // redirect chain, so the way back is a page with a button to click.
+    let back = page(&app, "/auth/google?app=nope&client=desktop").await;
+    assert!(back.contains(r#"href="aqrgo-desktop://auth?error=google""#));
+    let (status, back) = page_with_cookie(&app, "/auth/google/callback", &app_cookie).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(back.contains(r#"href="aqrgo-desktop://auth?error=google""#));
+    assert!(back.contains("افتح تطبيق AQRGO"));
 
     // Back in its window, the app trades the one-time code for a web session.
     let issue = || async {

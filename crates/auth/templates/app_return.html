@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}العودة إلى التطبيق{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<section class="auth-card">
+  <div class="auth-brand">{% include "logo_mark.html" %}AQRGO <span>CRM</span></div>
+  {% if failed %}
+  <p class="error">تعذر تسجيل الدخول. ارجع إلى التطبيق وحاول مرة أخرى.</p>
+  {% else %}
+  <h1>تم تسجيل الدخول</h1>
+  <p class="muted lede">اضغط الزر لفتح تطبيق AQRGO وإكمال الدخول، ثم اسمح للمتصفح بفتحه.</p>
+  {% endif %}
+  <a class="btn primary" id="open-app" href="{{ link }}">افتح تطبيق AQRGO</a>
+  <p class="muted">يمكنك إغلاق هذه الصفحة بعد فتح التطبيق.</p>
+</section>
+<script>
+  // Try once on our own; Chrome may only open the app after the click above.
+  setTimeout(function () { window.location.href = document.getElementById('open-app').href; }, 300);
+</script>
+{% endblock %}
