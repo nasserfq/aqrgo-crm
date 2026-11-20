@@ -627,6 +627,98 @@ async fn apple_with_a_hidden_email_can_be_linked_to_an_existing_account() {
     assert_eq!(body["user"]["email"], "nasser@example.com");
 }
 
+/// The app's own flow: Apple hid the email, the user types their real one and
+/// confirms it with the emailed code, and that one request ties the Apple ID
+/// to the account. Apple, Google and email code then all open one account.
+#[tokio::test]
+async fn confirming_an_email_after_apple_makes_them_one_account() {
+    let pool = testkit::fresh_pool().await;
+    app::migrate(&pool).await.unwrap();
+    let inbox = Inbox::default();
+    let web = auth::web::WebConfig {
+        public_url: "http://localhost".into(),
+        google: None,
+        telegram_bot: None,
+        whatsapp_number: None,
+        apple_web_client_id: None,
+    };
+    let mut modules = app::Modules::new(
+        pool.clone(),
+        jobs::Jobs::new(pool),
+        Arc::new(inbox.clone()),
+        auth::AuthConfig::default(),
+        web,
+        None,
+        None,
+    );
+    modules.auth_web.apple =
+        auth::apple::AppleVerifier::new("com.aqrgo.app", Arc::new(TestAppleKeys));
+    let app = app::router(&modules);
+    let me = sign_in(&app, &inbox, "nasser@example.com").await;
+    let (_, mine) = call(&app, Method::GET, "/api/v1/me", Some(&me), None).await;
+    let apple = apple_token("com.aqrgo.app", true, 600);
+
+    // Apple first: a hidden email is its own account.
+    let (_, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/apple",
+        None,
+        Some(json!({ "identity_token": apple })),
+    )
+    .await;
+    assert_eq!(body["user"]["email"], "abc123@privaterelay.appleid.com");
+
+    let request_code = || {
+        call(
+            &app,
+            Method::POST,
+            "/api/v1/auth/code",
+            None,
+            Some(json!({ "email": "nasser@example.com" })),
+        )
+    };
+
+    // A bad Apple token is refused before the code is spent.
+    request_code().await;
+    let code = inbox.0.lock().unwrap().take().unwrap();
+    let (status, _) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/verify",
+        None,
+        Some(
+            json!({ "email": "nasser@example.com", "code": code, "apple_identity_token": "junk" }),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/verify",
+        None,
+        Some(json!({ "email": "nasser@example.com", "code": code, "apple_identity_token": apple })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["user"]["id"], mine["id"]);
+
+    // From now on Apple opens the same account.
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/api/v1/auth/apple",
+        None,
+        Some(json!({ "identity_token": apple })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["user"]["id"], mine["id"]);
+    assert_eq!(body["user"]["email"], "nasser@example.com");
+}
+
 #[tokio::test]
 async fn deleting_the_account_removes_it_and_its_rows() {
     let (app, inbox) = app().await;

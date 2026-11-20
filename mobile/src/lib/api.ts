@@ -114,8 +114,16 @@ export function createApi(opts: Options) {
 
   return {
     requestCode: (email: string) => request<void>('POST', '/api/v1/auth/code', { email }),
-    verifyCode: (email: string, code: string) =>
-      request<{ token: string; user: User }>('POST', '/api/v1/auth/verify', { email, code }),
+    /**
+     * Signs in with the emailed code. With `appleIdentityToken` (Apple hid the
+     * user's email), it also ties that Apple ID to this account.
+     */
+    verifyCode: (email: string, code: string, appleIdentityToken?: string) =>
+      request<{ token: string; user: User }>('POST', '/api/v1/auth/verify', {
+        email,
+        code,
+        ...(appleIdentityToken ? { apple_identity_token: appleIdentityToken } : {}),
+      }),
     logout: () => request<void>('POST', '/api/v1/auth/logout'),
     me: () => request<User>('GET', '/api/v1/me'),
     /** Which sign-in buttons to show. */
