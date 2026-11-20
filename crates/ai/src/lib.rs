@@ -29,10 +29,11 @@ fn system_prompt(today: NaiveDate) -> String {
 القواعد:\n\
 - كل قطعة أو عقار مستقل = عنصر مستقل في القائمة.\n\
 - انسخ القيم كما وردت ولا تخترع أي معلومة. إذا لم تُذكر قيمة فاتركها نصاً فارغاً.\n\
-- offer_type: نوع العرض بصيغة قصيرة مثل «أرض للبيع» أو «فيلا للإيجار» أو «طلب شراء».\n\
+- offer_type: نوع العقار كما سماه الوسيط مع نوع الصفقة، بصيغة قصيرة، مثل «مبنى شقق فندقية للبيع» أو «فيلا للإيجار» أو «مطلوب شقة». \
+انسخ نوع العقار من الرسالة نفسها (أرض، فيلا، شقة، عمارة، مبنى، محل…) ولا تكتب نوعاً لم يرد فيها.\n\
 - plan_no رقم المخطط، plot_no رقم القطعة (قد تكون عدة أرقام)، area المساحة: الرقم والوحدة فقط (مثل «600 متر» أو «20×30»)، ولا تضع فيها اسم الحي أو أي وصف آخر.\n\
 - frontages: الواجهات وعروض الشوارع، مثل «شمالية شارع 20م، شرقية ممر 6م».\n\
-- location: الحي والمدينة أو أي وصف للموقع، ورابط الخريطة إن وجد.\n\
+- location: الحي والمدينة أو أي وصف للموقع، بدون روابط. ضع رابط الخريطة في details.\n\
 - price: السعر كما ورد (إجمالي أو سعر المتر، مع «على السوم» إن ذُكر).\n\
 - seller بيانات البائع/المالك، buyer بيانات المشتري، broker بيانات الوسيط: الاسم ورقم الجوال.\n\
 - rooms عدد الغرف، bathrooms عدد دورات المياه، floors عدد الأدوار (مثل «دورين ونص»)، units عدد الشقق أو المحلات أو الوحدات.\n\
@@ -90,6 +91,7 @@ pub fn parse_tool_input(input: &Value, today: NaiveDate) -> Vec<ListingInput> {
                 }
             }
             l.area = area::clean(&l.area, &l.location);
+            move_links_to_details(&mut l);
             l.listed_on = item
                 .get("listed_on")
                 .and_then(Value::as_str)
@@ -100,9 +102,34 @@ pub fn parse_tool_input(input: &Value, today: NaiveDate) -> Vec<ListingInput> {
         .collect()
 }
 
+/// Moves web links (a Google Maps link, usually) out of الموقع and into
+/// التفاصيل, so the location reads as a place.
+fn move_links_to_details(l: &mut ListingInput) {
+    let (links, place): (Vec<&str>, Vec<&str>) = l
+        .location
+        .split_whitespace()
+        .partition(|w| w.starts_with("http://") || w.starts_with("https://"));
+    if links.is_empty() {
+        return;
+    }
+    let place = place.join(" ");
+    for link in links {
+        if !l.details.contains(link) {
+            if !l.details.is_empty() {
+                l.details.push('\n');
+            }
+            l.details.push_str(&format!("رابط الموقع: {link}"));
+        }
+    }
+    l.location = place
+        .trim_matches(|c: char| c.is_whitespace() || "-–—،,".contains(c))
+        .to_string();
+}
+
 pub mod area;
 pub mod faithful;
 pub mod jev;
+pub mod offer_type;
 
 pub struct BedrockExtractor {
     client: aws_sdk_bedrockruntime::Client,
@@ -248,6 +275,38 @@ mod tests {
         );
         assert_eq!(rows[0].area, "600 متر");
         assert_eq!(rows[0].location, "حي الملقا");
+    }
+
+    #[test]
+    fn the_map_link_moves_out_of_the_location() {
+        let url = "https://maps.app.goo.gl/XtdLjM9maaaiYRoN7?g_st=ac";
+        let rows = parse_tool_input(
+            &json!({ "listings": [{ "offer_type": "مبنى للبيع",
+                                    "location": format!("حي النهضة – الرياض {url}"),
+                                    "details": "عمر العقار 10 سنوات" }] }),
+            today(),
+        );
+        assert_eq!(rows[0].location, "حي النهضة – الرياض");
+        assert_eq!(
+            rows[0].details,
+            format!("عمر العقار 10 سنوات\nرابط الموقع: {url}")
+        );
+        // Already in التفاصيل: not repeated.
+        let rows = parse_tool_input(
+            &json!({ "listings": [{ "offer_type": "مبنى للبيع",
+                                    "location": format!("النهضة {url}"),
+                                    "details": format!("الخريطة {url}") }] }),
+            today(),
+        );
+        assert_eq!(rows[0].location, "النهضة");
+        assert_eq!(rows[0].details, format!("الخريطة {url}"));
+    }
+
+    #[test]
+    fn the_prompt_does_not_suggest_land() {
+        // «أرض للبيع» as the only sale example made Bedrock copy it for a
+        // hotel-apartments building.
+        assert!(!system_prompt(today()).contains("«أرض للبيع»"));
     }
 
     #[test]

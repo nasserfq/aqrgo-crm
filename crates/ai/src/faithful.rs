@@ -70,7 +70,8 @@ pub fn repair(rows: &mut [ListingInput], fixes: &[&Suspect]) {
 }
 
 /// Without Jev, every suspect is repaired: the agent's own spelling is never
-/// worse than a letter Bedrock made up.
+/// worse than a letter Bedrock made up. A property type the message never
+/// uses is replaced too ([`crate::offer_type`]).
 pub struct SpellingGuard {
     inner: Arc<dyn LeadExtractor>,
 }
@@ -85,6 +86,9 @@ impl SpellingGuard {
 impl LeadExtractor for SpellingGuard {
     async fn extract(&self, text: &str, today: NaiveDate) -> Result<Vec<ListingInput>, String> {
         let mut rows = self.inner.extract(text, today).await?;
+        if let [row] = rows.as_mut_slice() {
+            row.offer_type = crate::offer_type::decide(text, &row.offer_type, None);
+        }
         let suspects = find_suspects(text, &rows);
         log(&suspects);
         repair(&mut rows, &suspects.iter().collect::<Vec<_>>());

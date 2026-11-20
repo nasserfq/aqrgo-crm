@@ -12,7 +12,7 @@ use serde_json::{json, Value};
 use crate::{
     area,
     faithful::{self, Suspect},
-    LeadExtractor,
+    offer_type, LeadExtractor,
 };
 
 /// Pinned so thresholds stay meaningful when the `jev-latest` alias moves.
@@ -49,6 +49,13 @@ pub trait Judge: Send + Sync {
     async fn confirm_slips(&self, text: &str, suspects: &[Suspect]) -> Result<Vec<f64>, String> {
         let _ = (text, suspects);
         Err("this judge does not check spelling".into())
+    }
+
+    /// The probability that `offer_type`, as Bedrock wrote it, names the
+    /// property (and deal) of `text`.
+    async fn check_offer_type(&self, text: &str, offer_type: &str) -> Result<f64, String> {
+        let _ = (text, offer_type);
+        Err("this judge does not check the offer type".into())
     }
 }
 
@@ -140,6 +147,38 @@ pub fn slips_request_body(model: &str, text: &str, suspects: &[Suspect]) -> Valu
     json!({ "model": model, "state": state, "questions": questions })
 }
 
+/// The request comparing Bedrock's نوع العرض with the message.
+pub fn offer_type_request_body(model: &str, text: &str, offer_type: &str) -> Value {
+    json!({
+        "model": model,
+        "state": {
+            "message": text,
+            "extracted_offer_type": offer_type,
+            "context": "An AI read a property listing out of `message` (usually Gulf Arabic, often copied from WhatsApp) \
+                        and wrote `extracted_offer_type` as the listing's type: the kind of property and the deal."
+        },
+        "questions": {
+            "offer_type_matches": {
+                "type": "noul",
+                "instructions": "Does `extracted_offer_type` name the kind of property that `message` offers or seeks?",
+                "criteria": {
+                    "true": "`extracted_offer_type` names the same kind of property as `message`, in the agent's words \
+                             or a common synonym (فلة and فيلا, عمارة and مبنى), and the same deal \
+                             (للبيع for sale, للإيجار for rent, مطلوب for wanted).",
+                    "false": "`extracted_offer_type` names a different kind of property than `message` describes, \
+                              for example أرض (land) when the message offers a building, hotel or serviced apartments, \
+                              or a villa, or it has the wrong deal."
+                }
+            }
+        }
+    })
+}
+
+/// Reads Jev's answer to [`offer_type_request_body`].
+pub fn parse_offer_type(res: &Value) -> Result<f64, String> {
+    noul(res, "offer_type_matches")
+}
+
 /// Reads one probability per suspect. A missing answer is an error.
 pub fn parse_slips(res: &Value, count: usize) -> Result<Vec<f64>, String> {
     (0..count)
@@ -226,10 +265,15 @@ impl Judge for JevClient {
         let body = slips_request_body(&self.model, text, suspects);
         parse_slips(&self.ask(&body).await?, suspects.len())
     }
+
+    async fn check_offer_type(&self, text: &str, offer_type: &str) -> Result<f64, String> {
+        let body = offer_type_request_body(&self.model, text, offer_type);
+        parse_offer_type(&self.ask(&body).await?)
+    }
 }
 
 /// Bedrock fills in the columns; Jev's judgments decide whether to bother,
-/// fill in الحالة, and confirm which miscopied words get the message's own
+/// fill in الحالة, check نوع العرض against the message, and confirm which miscopied words get the message's own
 /// word back. If Jev fails, Bedrock runs on its own and every suspect word
 /// is repaired, as [`faithful::SpellingGuard`] does.
 pub struct JudgedExtractor {
@@ -267,6 +311,25 @@ impl LeadExtractor for JudgedExtractor {
         let mut rows = self.inner.extract(text, today).await?;
         for row in &mut rows {
             row.area = area::clean(&row.area, &row.location);
+        }
+        // Jev compares the type Bedrock wrote with the message; code decides.
+        // Like the status and the size, only for a message with one property.
+        if let [row] = rows.as_mut_slice() {
+            let matches = if row.offer_type.trim().is_empty() {
+                None
+            } else {
+                match self.judge.check_offer_type(text, &row.offer_type).await {
+                    Ok(p) => {
+                        tracing::info!(offer_type = %row.offer_type, matches = p, "Jev offer type check");
+                        Some(p)
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Jev offer type check unavailable, checking in code");
+                        None
+                    }
+                }
+            };
+            row.offer_type = offer_type::decide(text, &row.offer_type, matches);
         }
         // A stated status, or a size picked from the message, only applies
         // when the message holds one property.
