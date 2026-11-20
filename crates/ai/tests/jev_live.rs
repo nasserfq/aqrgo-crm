@@ -88,3 +88,23 @@ async fn probe_area() {
         }
     }
 }
+
+/// Jev comparing نوع العرض with the message. The Nahda building was saved as
+/// أرض للبيع (wrong); the other two types are right (one is a synonym).
+#[tokio::test]
+#[ignore]
+async fn probe_offer_type() {
+    let key = std::env::var("TYPESAFE_API_KEY").expect("set TYPESAFE_API_KEY");
+    let jev = JevClient::new(key, DEFAULT_MODEL.into());
+    let nahda = include_str!("fixtures/nahda_hotel_building.txt");
+    for (text, offer_type) in [
+        (nahda, "أرض للبيع"),
+        (nahda, "مبنى شقق فندقية مخدومة للبيع"),
+        ("للبيع فلة دورين بحي النرجس", "فيلا للبيع"),
+    ] {
+        match jev.check_offer_type(text, offer_type).await {
+            Ok(p) => println!("matches={p:.2} {offer_type}"),
+            Err(e) => println!("ERROR {e} | {offer_type}"),
+        }
+    }
+}
