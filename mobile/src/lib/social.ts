@@ -74,13 +74,20 @@ async function appleCredential() {
   return { ...credential, identityToken: credential.identityToken };
 }
 
-export async function signInWithApple(api: Api): Promise<SignedIn> {
+/** Apple's "Hide My Email" address: it matches no account the user already has. */
+export const isHiddenAppleEmail = (email: string) => email.endsWith('@privaterelay.appleid.com');
+
+/** A finished Apple sign-in, plus Apple's token so the Apple ID can be tied to another account. */
+export type AppleSignedIn = { token: string; user: User; identityToken: string } | null;
+
+export async function signInWithApple(api: Api): Promise<AppleSignedIn> {
   const credential = await appleCredential();
   if (!credential) return null;
   const name = [credential.fullName?.givenName, credential.fullName?.familyName]
     .filter(Boolean)
     .join(' ');
-  return api.appleSignIn(credential.identityToken, name);
+  const signed = await api.appleSignIn(credential.identityToken, name);
+  return { ...signed, identityToken: credential.identityToken };
 }
 
 /**

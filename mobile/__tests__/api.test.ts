@@ -46,6 +46,21 @@ describe('api client', () => {
     expect(session.user.email).toBe('n@x.com');
   });
 
+  it("confirms the email with Apple's token when Apple hid the email", async () => {
+    const { fn, calls } = fakeFetch([
+      { status: 200, body: { token: 't0k', user: { id: 1, email: 'n@x.com', name: 'n' } } },
+    ]);
+    const api = createApi({ baseUrl: 'https://aqrgo.com', getToken: () => null, fetch: fn });
+
+    await api.verifyCode('n@x.com', '123456', 'apple.jwt');
+
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({
+      email: 'n@x.com',
+      code: '123456',
+      apple_identity_token: 'apple.jwt',
+    });
+  });
+
   it('sends the bearer token and builds the search query', async () => {
     const { fn, calls } = fakeFetch([{ status: 200, body: { listings: [row] } }]);
     const api = createApi({ baseUrl: 'https://aqrgo.com/', getToken: () => 'abc', fetch: fn });

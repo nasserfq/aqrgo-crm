@@ -8,7 +8,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Field, Note, T } from '../components/ui';
 import { ApiError } from '../lib/api';
 import { API_URL, useSession } from '../lib/session';
-import { appleAvailable, signInWithApple, signInWithGoogle, type SignedIn } from '../lib/social';
+import {
+  appleAvailable,
+  isHiddenAppleEmail,
+  signInWithApple,
+  signInWithGoogle,
+  type AppleSignedIn,
+  type SignedIn,
+} from '../lib/social';
 import { fonts, radius, useColors } from '../lib/theme';
 
 export default function Login() {
@@ -17,6 +24,9 @@ export default function Login() {
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
   const [step, setStep] = useState<'email' | 'code'>('email');
+  // Set after Sign in with Apple when Apple hid the email: we ask for the real
+  // one once, so Apple, Google and the email code all open the same account.
+  const [hiddenApple, setHiddenApple] = useState<NonNullable<AppleSignedIn> | null>(null);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
@@ -54,9 +64,21 @@ export default function Login() {
       if (signed) await signIn(signed.token, signed.user);
     });
 
+  const withApple = () =>
+    run(async () => {
+      const signed = await signInWithApple(api);
+      if (!signed) return;
+      if (isHiddenAppleEmail(signed.user.email)) {
+        setHiddenApple(signed);
+        setStep('email');
+      } else {
+        await signIn(signed.token, signed.user);
+      }
+    });
+
   const verify = () =>
     run(async () => {
-      const { token, user } = await api.verifyCode(email.trim(), code);
+      const { token, user } = await api.verifyCode(email.trim(), code, hiddenApple?.identityToken);
       await signIn(token, user);
     });
 
@@ -74,7 +96,34 @@ export default function Login() {
 
         {error ? <Note>{error}</Note> : null}
 
-        {step === 'email' ? (
+        {step === 'email' && hiddenApple ? (
+          <View style={{ gap: 16 }}>
+            <Note kind="info">
+              أخفت Apple بريدك عنّا. اكتب بريدك مرة واحدة ليفتح الدخول عبر Apple حسابك نفسه الذي تدخله بـ Google أو برمز البريد.
+            </Note>
+            <Field
+              testID="join-email"
+              label="بريدك الإلكتروني"
+              placeholder="name@example.com"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              returnKeyType="send"
+              onSubmitEditing={sendCode}
+            />
+            <Button testID="join-send-code" label="أرسل رمز التأكيد" onPress={sendCode} busy={busy} disabled={!email.trim()} />
+            <Button
+              testID="join-skip"
+              kind="outline"
+              label="متابعة ببريد Apple المخفي (حساب مستقل)"
+              onPress={() => run(() => signIn(hiddenApple.token, hiddenApple.user))}
+              disabled={busy}
+            />
+          </View>
+        ) : step === 'email' ? (
           <View style={{ gap: 16 }}>
             {apple ? (
               <AppleAuthentication.AppleAuthenticationButton
@@ -87,7 +136,7 @@ export default function Login() {
                 }
                 cornerRadius={radius}
                 style={{ height: 52 }}
-                onPress={() => withProvider(() => signInWithApple(api))}
+                onPress={withApple}
               />
             ) : null}
             {google ? (

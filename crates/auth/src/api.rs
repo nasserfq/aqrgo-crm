@@ -112,18 +112,40 @@ async fn request_code(State(state): State<AuthWeb>, Json(r): Json<CodeRequest>) 
 struct VerifyRequest {
     email: String,
     code: String,
+    /// Sent when the user came in through Sign in with Apple and Apple hid
+    /// their email: confirming the real email here also ties that Apple ID to
+    /// the account, so Apple, Google and the email code all open one account.
+    #[serde(default)]
+    apple_identity_token: Option<String>,
 }
 
 async fn verify_code(State(state): State<AuthWeb>, Json(r): Json<VerifyRequest>) -> Response {
+    // Check Apple's token first: a bad one must not spend the emailed code.
+    let apple_email = match r.apple_identity_token.as_deref().filter(|t| !t.is_empty()) {
+        Some(t) => match state.apple.verify(t).await {
+            Ok(identity) => Some(identity.email),
+            Err(why) => {
+                tracing::warn!(reason = %why, "apple link at sign-in refused");
+                return error(StatusCode::UNAUTHORIZED, "تعذر ربط Apple، حاول مرة أخرى");
+            }
+        },
+        None => None,
+    };
     let token = match state.service.verify_code(&r.email, &r.code).await {
         Ok(t) => t,
         Err(e) => return auth_error(e),
     };
-    match state.service.user_for_session(&token).await {
-        Ok(Some(user)) => Json(json!({ "token": token, "user": user })).into_response(),
-        Ok(None) => auth_error(AuthError::NotAllowed),
-        Err(e) => auth_error(e),
+    let user = match state.service.user_for_session(&token).await {
+        Ok(Some(user)) => user,
+        Ok(None) => return auth_error(AuthError::NotAllowed),
+        Err(e) => return auth_error(e),
+    };
+    if let Some(email) = apple_email {
+        if let Err(e) = state.service.add_sign_in_email(user.id, &email).await {
+            return auth_error(e);
+        }
     }
+    Json(json!({ "token": token, "user": user })).into_response()
 }
 
 /// Which sign-in buttons the app should show.
