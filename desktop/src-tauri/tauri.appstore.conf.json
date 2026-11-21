@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "com.aqrgo.app",
+  "app": {
+    "macOSPrivateApi": false
+  },
+  "bundle": {
+    "macOS": {
+      "entitlements": "./Entitlements.appstore.plist",
+      "files": {
+        "embedded.provisionprofile": "./AQRGO_MAS.provisionprofile"
+      }
+    }
+  }
+}

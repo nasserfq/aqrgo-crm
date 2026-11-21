@@ -152,3 +152,97 @@ jobs:
             desktop/src-tauri/target/**/release/bundle/rpm/*.rpm
             desktop/src-tauri/target/**/release/bundle/appimage/*.AppImage
           retention-days: 14
+
+  # The Mac App Store version: same app, sandboxed, no private window APIs,
+  # signed for the store and packaged as a .pkg. It is the macOS version of
+  # the App Store app com.aqrgo.app (one listing with the iPhone app). Pull
+  # requests build it; main uploads it to App Store Connect.
+  appstore:
+    needs: check
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+          key: appstore
+      - run: npm ci
+        working-directory: desktop
+
+      - name: Store certificates and profile
+        id: certs
+        env:
+          CERTS: ${{ secrets.APPLE_MAS_CERTIFICATES }}
+          CERTS_PASSWORD: ${{ secrets.APPLE_MAS_CERTIFICATES_PASSWORD }}
+          PROFILE: ${{ secrets.APPLE_MAS_PROFILE }}
+        run: |
+          if [ -z "$CERTS" ] || [ -z "$PROFILE" ]; then
+            echo "No Mac App Store certificates yet: skipping the store build."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/mas.keychain-db"
+          kc_password=$(openssl rand -hex 16)
+          security create-keychain -p "$kc_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$kc_password" "$keychain"
+          printf '%s' "$CERTS" | base64 --decode > "$RUNNER_TEMP/mas.p12"
+          security import "$RUNNER_TEMP/mas.p12" -k "$keychain" -P "$CERTS_PASSWORD" -A -t cert -f pkcs12
+          rm "$RUNNER_TEMP/mas.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign:,productbuild: -s -k "$kc_password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          printf '%s' "$PROFILE" | base64 --decode > desktop/src-tauri/AQRGO_MAS.provisionprofile
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build for the Mac App Store
+        if: steps.certs.outputs.ready == 'true'
+        working-directory: desktop
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_MAS_APP_IDENTITY }}
+        run: |
+          # Each upload needs a new build number.
+          echo "{\"bundle\":{\"macOS\":{\"bundleVersion\":\"${{ github.run_number }}\"}}}" > "$RUNNER_TEMP/build-number.json"
+          npm run tauri build -- --target universal-apple-darwin --bundles app \
+            --config src-tauri/tauri.appstore.conf.json --config "$RUNNER_TEMP/build-number.json" \
+            -- --features appstore
+          app=src-tauri/target/universal-apple-darwin/release/bundle/macos/AQRGO.app
+          codesign -d --entitlements - "$app" | grep -q app-sandbox
+          ! nm -u "$app/Contents/MacOS/aqrgo-desktop" | grep -q _setDrawsBackground
+          plutil -p "$app/Contents/Info.plist" | grep -E 'CFBundleIdentifier|CFBundleVersion|CFBundleShortVersionString|LSMinimumSystemVersion'
+
+      - name: Package
+        if: steps.certs.outputs.ready == 'true'
+        working-directory: desktop
+        env:
+          INSTALLER_IDENTITY: ${{ secrets.APPLE_MAS_INSTALLER_IDENTITY }}
+        run: |
+          xcrun productbuild --component src-tauri/target/universal-apple-darwin/release/bundle/macos/AQRGO.app /Applications \
+            --sign "$INSTALLER_IDENTITY" AQRGO.pkg
+          pkgutil --check-signature AQRGO.pkg
+
+      - name: Upload to App Store Connect
+        if: steps.certs.outputs.ready == 'true' && github.event_name != 'pull_request'
+        working-directory: desktop
+        env:
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys
+          printf '%s\n' "$API_KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_$API_KEY_ID.p8
+          xcrun altool --upload-app --type macos --file AQRGO.pkg --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER"
+
+      - if: steps.certs.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqrgo-desktop-mac-app-store
+          path: desktop/AQRGO.pkg
+          retention-days: 14

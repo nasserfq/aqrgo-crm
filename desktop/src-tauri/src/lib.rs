@@ -85,9 +85,13 @@ fn build_window(app: &AppHandle) -> tauri::Result<()> {
         .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition::new(
             18.0, 22.0,
         )))
-        .transparent(true)
-        .effects(mac::sidebar_effect())
         .initialization_script(mac::SHELL_SCRIPT);
+    // The see-through sidebar needs a private window API, which the Mac App
+    // Store refuses; the store build keeps a solid sidebar instead.
+    #[cfg(all(target_os = "macos", not(feature = "appstore")))]
+    let builder = builder.transparent(true).effects(mac::sidebar_effect());
+    #[cfg(all(target_os = "macos", feature = "appstore"))]
+    let builder = builder.initialization_script(mac::SOLID_SCRIPT);
     builder
         .on_navigation(move |url| match nav::decide(url) {
             Nav::Stay => true,
