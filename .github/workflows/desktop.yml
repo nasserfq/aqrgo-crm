@@ -238,7 +238,8 @@ jobs:
         run: |
           mkdir -p ~/.appstoreconnect/private_keys
           printf '%s\n' "$API_KEY_P8" > ~/.appstoreconnect/private_keys/AuthKey_$API_KEY_ID.p8
-          xcrun altool --upload-app --type macos --file AQRGO.pkg --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER"
+          # 6835524535 is the App Store app (shared with the iPhone app).
+          xcrun altool --upload-app --type macos --file AQRGO.pkg --apple-id 6835524535 --apiKey "$API_KEY_ID" --apiIssuer "$API_ISSUER"
 
       - if: steps.certs.outputs.ready == 'true'
         uses: actions/upload-artifact@v4
