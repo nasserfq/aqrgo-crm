@@ -56,6 +56,21 @@ secrets exist:
 | `APPLE_SIGNING_IDENTITY` | e.g. `Developer ID Application: Name (PNW88M62LY)` |
 | `APPLE_API_KEY` / `APPLE_API_ISSUER` / `APPLE_API_KEY_P8` | App Store Connect API key id, issuer id and the `.p8` text, for notarization |
 
+### Mac App Store
+
+The `appstore` job builds the same app for the Mac App Store: it is the macOS
+version of the App Store app `com.aqrgo.app` (one listing with the iPhone
+app). `src-tauri/tauri.appstore.conf.json` switches the bundle id, turns off
+the private window API (Apple rejects it, so the sidebar is solid, not
+see-through; mac.css paints it for `html[data-solid]`) and adds the sandbox
+(`Entitlements.appstore.plist`) and the provisioning profile. Rust code that
+differs is behind the `appstore` cargo feature. Pull requests build the
+`.pkg`; main uploads it to App Store Connect. It needs these secrets:
+`APPLE_MAS_CERTIFICATES` (+ `_PASSWORD`; .p12 with the Mac App Distribution
+and Mac Installer Distribution identities), `APPLE_MAS_PROFILE` (MAC_APP_STORE
+profile, base64), `APPLE_MAS_APP_IDENTITY`, `APPLE_MAS_INSTALLER_IDENTITY`,
+plus the API key secrets above.
+
 ## Run it locally
 
 Needs Rust and Node 22 (on Linux also `libwebkit2gtk-4.1-dev`).

@@ -42,8 +42,22 @@ pub const SHELL_SCRIPT: &str = r#"(function () {
   else ready();
 })();"#;
 
+/// The Mac App Store build has no see-through window: the page paints the
+/// sidebar itself (`html[data-solid]` in mac.css).
+#[cfg_attr(not(all(target_os = "macos", feature = "appstore")), allow(dead_code))]
+pub const SOLID_SCRIPT: &str = r#"(function () {
+  function mark() {
+    if (document.documentElement) document.documentElement.setAttribute("data-solid", "");
+  }
+  mark();
+  document.addEventListener("DOMContentLoaded", mark);
+})();"#;
+
 /// The sidebar material, as Finder and Mail use it.
-#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#[cfg_attr(
+    not(all(target_os = "macos", not(feature = "appstore"))),
+    allow(dead_code)
+)]
 pub fn sidebar_effect() -> WindowEffectsConfig {
     EffectsBuilder::new()
         .effect(Effect::Sidebar)
@@ -186,5 +200,10 @@ mod tests {
     fn the_page_is_marked_and_the_toolbar_moves_the_window() {
         assert!(SHELL_SCRIPT.contains(r#"setAttribute("data-shell", "mac")"#));
         assert!(SHELL_SCRIPT.contains(r#"data-tauri-drag-region", "deep""#));
+    }
+
+    #[test]
+    fn the_store_build_paints_its_own_sidebar() {
+        assert!(SOLID_SCRIPT.contains(r#"setAttribute("data-solid", "")"#));
     }
 }
