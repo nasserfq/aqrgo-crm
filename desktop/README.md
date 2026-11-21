@@ -62,7 +62,8 @@ The `appstore` job builds the same app for the Mac App Store: it is the macOS
 version of the App Store app `com.aqrgo.app` (one listing with the iPhone
 app). `src-tauri/tauri.appstore.conf.json` switches the bundle id, turns off
 the private window API (Apple rejects it, so the sidebar is solid, not
-see-through; mac.css paints it for `html[data-solid]`) and adds the sandbox
+see-through; mac.css paints it for `html[data-store]`, and hides Google
+sign-in there, since App Review wants Sign in with Apple beside it) and adds the sandbox
 (`Entitlements.appstore.plist`) and the provisioning profile. Rust code that
 differs is behind the `appstore` cargo feature. Pull requests build the
 `.pkg`; main uploads it to App Store Connect. It needs these secrets:

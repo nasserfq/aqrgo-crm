@@ -91,7 +91,7 @@ fn build_window(app: &AppHandle) -> tauri::Result<()> {
     #[cfg(all(target_os = "macos", not(feature = "appstore")))]
     let builder = builder.transparent(true).effects(mac::sidebar_effect());
     #[cfg(all(target_os = "macos", feature = "appstore"))]
-    let builder = builder.initialization_script(mac::SOLID_SCRIPT);
+    let builder = builder.initialization_script(mac::STORE_SCRIPT);
     builder
         .on_navigation(move |url| match nav::decide(url) {
             Nav::Stay => true,
