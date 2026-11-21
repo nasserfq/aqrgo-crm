@@ -42,12 +42,12 @@ pub const SHELL_SCRIPT: &str = r#"(function () {
   else ready();
 })();"#;
 
-/// The Mac App Store build has no see-through window: the page paints the
-/// sidebar itself (`html[data-solid]` in mac.css).
+/// Marks pages shown in the Mac App Store build (`html[data-store]`): mac.css
+/// paints the sidebar (no see-through window there) and hides Google sign-in.
 #[cfg_attr(not(all(target_os = "macos", feature = "appstore")), allow(dead_code))]
-pub const SOLID_SCRIPT: &str = r#"(function () {
+pub const STORE_SCRIPT: &str = r#"(function () {
   function mark() {
-    if (document.documentElement) document.documentElement.setAttribute("data-solid", "");
+    if (document.documentElement) document.documentElement.setAttribute("data-store", "");
   }
   mark();
   document.addEventListener("DOMContentLoaded", mark);
@@ -203,7 +203,7 @@ mod tests {
     }
 
     #[test]
-    fn the_store_build_paints_its_own_sidebar() {
-        assert!(SOLID_SCRIPT.contains(r#"setAttribute("data-solid", "")"#));
+    fn the_store_build_marks_its_pages() {
+        assert!(STORE_SCRIPT.contains(r#"setAttribute("data-store", "")"#));
     }
 }

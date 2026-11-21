@@ -64,9 +64,13 @@
 
 /* The page sits on the window's material; the content pane is opaque. */
 [data-shell="mac"] body { background: transparent; font-size: 13px; line-height: 1.5; color: var(--ink); }
-/* The Mac App Store build has no see-through window (data-solid): paint the sidebar. */
-[data-shell="mac"][data-solid] body { background: #ecebf1; }
-@media (prefers-color-scheme: dark) { [data-shell="mac"][data-solid] body { background: #2a2930; } }
+/* The Mac App Store build (data-store) has no see-through window: paint the
+   sidebar. It also offers no Google sign-in (App Review guideline 4.8 wants
+   Sign in with Apple next to it): email code, and Apple once it is set up. */
+[data-shell="mac"][data-store] body { background: #ecebf1; }
+@media (prefers-color-scheme: dark) { [data-shell="mac"][data-store] body { background: #2a2930; } }
+[data-store] .auth-card .btn.google { display: none; }
+[data-store] .auth-card:not(:has(.btn.apple)) .or { display: none; }
 [data-shell="mac"] main { animation: none; }
 [data-shell="mac"] a, [data-shell="mac"] button, [data-shell="mac"] .btn, [data-shell="mac"] .grid tbody tr,
 [data-shell="mac"] .check, [data-shell="mac"] select { cursor: default; }
