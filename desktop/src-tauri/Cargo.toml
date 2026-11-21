@@ -1,6 +1,6 @@
 [package]
 name = "aqrgo-desktop"
-version = "1.1.0"
+version = "1.1.1"
 description = "AQRGO CRM for Mac, Windows and Linux"
 edition = "2021"
 publish = false
