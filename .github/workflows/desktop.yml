@@ -122,6 +122,24 @@ jobs:
           releaseDraft: false
           prerelease: false
 
+      # tauri-action notarizes the app inside the DMG but not the DMG itself, so
+      # Gatekeeper calls the download "Unnotarized". Notarize and staple it too,
+      # then replace the copy in the release.
+      - name: Notarize and staple the DMG
+        if: runner.os == 'macOS' && env.APPLE_API_KEY_PATH != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          dmg=$(ls desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg)
+          xcrun notarytool submit "$dmg" --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY" --issuer "$APPLE_API_ISSUER" --wait
+          xcrun stapler staple "$dmg"
+          xcrun stapler validate "$dmg"
+          spctl -a -vvv -t open --context context:primary-signature "$dmg"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            version=$(jq -r .version desktop/src-tauri/tauri.conf.json)
+            gh release upload "desktop-v$version" "$dmg" --clobber
+          fi
+
       - if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
